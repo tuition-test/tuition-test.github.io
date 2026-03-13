@@ -916,7 +916,7 @@ function renderQuestions() {
 
     const optHTML = q.options.map((opt, j) => `
       <label class="option-label" id="opt_${i}_${j}" onclick="selectOption(${i},${j})">
-        <input type="radio" name="q${i}" value="${opt}">
+        <input type="radio" name="q${i}" value="${opt}" data-index="${j}">
         <div class="radio-dot"></div>
         <span class="option-text">${opt}</span>
         <span class="result-icon" id="icon_${i}_${j}"></span>
@@ -1023,9 +1023,9 @@ async function submitTest() {
         wrong++;
         const wrongLabel = selected.closest(".option-label");
         wrongLabel.classList.add("wrong");
-        const wrongJIdx = opts.indexOf(selected.value);
+        const wrongJIdx = parseInt(selected.getAttribute('data-index'));
         const wrongIcon = document.getElementById(`icon_${i}_${wrongJIdx}`);
-        wrongIcon.textContent = "✗";
+        if (wrongIcon) wrongIcon.textContent = "✗";
         wrongIcon.classList.add("show");
       }
     } else {
