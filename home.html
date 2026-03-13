@@ -1,0 +1,1855 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EduPortal — Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #070c18;
+    --surface: #0e1525;
+    --surface2: #141d2e;
+    --surface3: #1a2438;
+    --accent: #4f9ef8;
+    --accent2: #7c3aed;
+    --green: #10b981;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --text: #f0f4ff;
+    --muted: #7a90b0;
+    --border: rgba(79,158,248,0.12);
+  }
+
+  html, body {
+    min-height: 100%;
+    font-family: 'Sora', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 60% 40% at 10% 0%, rgba(79,158,248,0.08) 0%, transparent 60%),
+      radial-gradient(ellipse 50% 40% at 90% 100%, rgba(124,58,237,0.07) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── NAVBAR ── */
+  .navbar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    background: rgba(7,12,24,0.85);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .nav-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .logo-icon {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    box-shadow: 0 0 16px rgba(79,158,248,0.3);
+  }
+
+  .logo-text {
+    font-size: 18px;
+    font-weight: 700;
+    background: linear-gradient(90deg, var(--accent), #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .nav-right {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .nav-name {
+    font-size: 13px;
+    color: var(--muted);
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .avatar {
+    width: 34px; height: 34px;
+    background: linear-gradient(135deg, var(--accent2), var(--accent));
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 700;
+    color: white;
+    flex-shrink: 0;
+  }
+
+  .logout-btn {
+    padding: 7px 16px;
+    background: rgba(239,68,68,0.1);
+    border: 1px solid rgba(239,68,68,0.2);
+    color: #f87171;
+    border-radius: 8px;
+    font-family: 'Sora', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .logout-btn:hover {
+    background: rgba(239,68,68,0.2);
+    border-color: rgba(239,68,68,0.4);
+  }
+
+  /* ── MAIN ── */
+  .main {
+    padding: 84px 20px 40px;
+    max-width: 900px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Greeting */
+  .greeting {
+    margin-bottom: 28px;
+    animation: fadeUp 0.6s cubic-bezier(0.16,1,0.3,1) both;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .greeting-time {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--accent);
+    margin-bottom: 6px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .greeting-name {
+    font-size: 30px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    line-height: 1.2;
+  }
+
+  .greeting-name span {
+    background: linear-gradient(90deg, var(--accent), #a78bfa, var(--green));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .greeting-sub {
+    font-size: 14px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  /* Student info bar */
+  .info-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 30px;
+    animation: fadeUp 0.6s 0.1s cubic-bezier(0.16,1,0.3,1) both;
+  }
+
+  .info-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+  }
+
+  .info-chip svg { width: 13px; height: 13px; color: var(--accent); }
+
+  /* Quick stat cards */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin-bottom: 30px;
+    animation: fadeUp 0.6s 0.15s cubic-bezier(0.16,1,0.3,1) both;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+
+  .stat-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+  }
+
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+
+  .stat-card.blue::before { background: linear-gradient(90deg, var(--accent), transparent); }
+  .stat-card.purple::before { background: linear-gradient(90deg, var(--accent2), transparent); }
+  .stat-card.green::before { background: linear-gradient(90deg, var(--green), transparent); }
+
+  .stat-icon {
+    font-size: 22px;
+    margin-bottom: 10px;
+  }
+
+  .stat-num {
+    font-size: 28px;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .stat-label {
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 500;
+  }
+
+  /* Nav tabs */
+  .tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 22px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 4px;
+    animation: fadeUp 0.6s 0.2s cubic-bezier(0.16,1,0.3,1) both;
+    overflow-x: auto;
+  }
+
+  .tab {
+    flex: 1;
+    min-width: 90px;
+    padding: 10px 16px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-family: 'Sora', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 9px;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+
+  .tab:hover { color: var(--text); background: var(--surface2); }
+
+  .tab.active {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: white;
+    box-shadow: 0 4px 14px rgba(79,158,248,0.25);
+  }
+
+  /* Content panels */
+  .panel { display: none; animation: fadeUp 0.4s ease both; }
+  .panel.active { display: block; }
+
+  /* Notice / Homework cards */
+  .item-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px 20px;
+    margin-bottom: 12px;
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .item-card:hover {
+    border-color: rgba(79,158,248,0.25);
+    transform: translateX(4px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+  }
+
+  .item-icon {
+    width: 42px; height: 42px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+
+  .item-icon.notice { background: rgba(79,158,248,0.12); }
+  .item-icon.hw { background: rgba(124,58,237,0.12); }
+  .item-icon.urgent { background: rgba(239,68,68,0.12); }
+
+  .item-body { flex: 1; }
+
+  .item-title {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+
+  .item-desc {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  .item-meta {
+    margin-top: 8px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .badge {
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+  }
+
+  .badge.blue  { background: rgba(79,158,248,0.15); color: var(--accent); }
+  .badge.amber { background: rgba(245,158,11,0.15); color: var(--amber); }
+  .badge.green { background: rgba(16,185,129,0.15); color: var(--green); }
+  .badge.red   { background: rgba(239,68,68,0.15);  color: var(--red); }
+
+  .item-date {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  /* Test panel */
+  .test-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px,1fr));
+    gap: 14px;
+  }
+
+  .test-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 22px 20px;
+    cursor: pointer;
+    transition: all 0.25s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .test-card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(79,158,248,0.05), transparent);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .test-card:hover {
+    border-color: rgba(79,158,248,0.35);
+    transform: translateY(-4px);
+    box-shadow: 0 12px 30px rgba(0,0,0,0.25);
+  }
+
+  .test-card:hover::after { opacity: 1; }
+
+  .test-subject {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--accent);
+    margin-bottom: 8px;
+  }
+
+  .test-name {
+    font-size: 17px;
+    font-weight: 700;
+    margin-bottom: 6px;
+    letter-spacing: -0.3px;
+  }
+
+  .test-info {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 16px;
+  }
+
+  .test-btn {
+    width: 100%;
+    padding: 10px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-family: 'Sora', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    z-index: 1;
+  }
+
+  .test-btn:hover {
+    box-shadow: 0 6px 18px rgba(79,158,248,0.3);
+    transform: scale(1.02);
+  }
+
+  .test-btn:disabled {
+    background: var(--surface3);
+    color: var(--muted);
+    cursor: default;
+    transform: none;
+    box-shadow: none;
+  }
+
+  /* Empty state */
+  .empty {
+    text-align: center;
+    padding: 50px 20px;
+    color: var(--muted);
+  }
+
+  .empty-icon { font-size: 40px; margin-bottom: 12px; }
+  .empty-text { font-size: 15px; font-weight: 500; }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(10px);
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+  }
+
+  .modal-overlay.open {
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 30px;
+    max-width: 480px;
+    width: 100%;
+    transform: scale(0.95) translateY(10px);
+    transition: all 0.3s cubic-bezier(0.16,1,0.3,1);
+    box-shadow: 0 25px 60px rgba(0,0,0,0.5);
+  }
+
+  .modal-overlay.open .modal {
+    transform: scale(1) translateY(0);
+  }
+
+  .modal-title {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+
+  .modal-sub {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 22px;
+  }
+
+  .q-num {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--accent);
+    font-family: 'JetBrains Mono', monospace;
+    margin-bottom: 8px;
+  }
+
+  .question {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    line-height: 1.5;
+  }
+
+  .options {
+    display: grid;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+
+  .option {
+    padding: 11px 16px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    font-family: 'Sora', sans-serif;
+    font-size: 13px;
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: left;
+  }
+
+  .option:hover {
+    border-color: rgba(79,158,248,0.35);
+    background: rgba(79,158,248,0.07);
+  }
+
+  .option.selected {
+    border-color: var(--accent);
+    background: rgba(79,158,248,0.12);
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .option.correct {
+    border-color: var(--green);
+    background: rgba(16,185,129,0.12);
+    color: var(--green);
+  }
+
+  .option.wrong {
+    border-color: var(--red);
+    background: rgba(239,68,68,0.12);
+    color: var(--red);
+  }
+
+  .modal-footer {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+  }
+
+  .modal-btn {
+    padding: 10px 22px;
+    border-radius: 9px;
+    font-family: 'Sora', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+  }
+
+  .modal-btn.primary {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: white;
+  }
+
+  .modal-btn.primary:hover { box-shadow: 0 6px 18px rgba(79,158,248,0.3); }
+
+  .modal-btn.ghost {
+    background: var(--surface2);
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+
+  .progress-bar {
+    height: 4px;
+    background: var(--surface2);
+    border-radius: 2px;
+    margin-bottom: 22px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    border-radius: 2px;
+    transition: width 0.3s ease;
+  }
+
+  .score-display {
+    text-align: center;
+    padding: 20px 0;
+  }
+
+  .score-big {
+    font-size: 56px;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    background: linear-gradient(90deg, var(--accent), #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .score-label {
+    color: var(--muted);
+    font-size: 14px;
+    margin-top: 4px;
+  }
+
+  /* Mobile bottom nav */
+  .bottom-nav {
+    display: none;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: rgba(7,12,24,0.95);
+    backdrop-filter: blur(20px);
+    border-top: 1px solid var(--border);
+    padding: 10px 16px;
+    z-index: 100;
+    gap: 4px;
+    justify-content: space-around;
+  }
+
+  .bnav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 6px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-family: 'Sora', sans-serif;
+    font-size: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    border-radius: 10px;
+    transition: all 0.2s;
+  }
+
+  .bnav-item svg { width: 20px; height: 20px; }
+
+  .bnav-item.active {
+    color: var(--accent);
+    background: rgba(79,158,248,0.1);
+  }
+
+  @media (max-width: 640px) {
+    .bottom-nav { display: flex; }
+    .tabs { display: none !important; }
+    .main { padding-bottom: 80px; }
+    .stats { grid-template-columns: 1fr 1fr 1fr; }
+    .stat-num { font-size: 20px; }
+    .greeting-name { font-size: 24px; }
+    .nav-name span { display: none; }
+  }
+
+  @media (max-width: 400px) {
+    .stats { grid-template-columns: 1fr 1fr; }
+  }
+
+  /* ── Exam Hero ── */
+  .exam-hero {
+    background: linear-gradient(135deg, rgba(79,158,248,0.08), rgba(124,58,237,0.08));
+    border: 1px solid rgba(79,158,248,0.2);
+    border-radius: 18px;
+    padding: 36px 28px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 24px;
+  }
+
+  .exam-hero-glow {
+    position: absolute;
+    top: -60px; left: 50%;
+    transform: translateX(-50%);
+    width: 300px; height: 200px;
+    background: radial-gradient(ellipse, rgba(79,158,248,0.15) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .exam-hero-icon { font-size: 40px; margin-bottom: 12px; }
+
+  .exam-hero-title {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    letter-spacing: -0.3px;
+  }
+
+  .exam-hero-sub {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 22px;
+    line-height: 1.5;
+    max-width: 360px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .exam-hero-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 28px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border: none;
+    border-radius: 10px;
+    color: white;
+    font-family: 'Sora', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 6px 20px rgba(79,158,248,0.3);
+    position: relative;
+    z-index: 1;
+  }
+
+  .exam-hero-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(79,158,248,0.45); }
+
+  /* ── Quick Launch ── */
+  .quick-launch-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+
+  .quick-launch-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .ql-chip {
+    padding: 9px 18px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    color: var(--text);
+    font-family: 'Sora', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .ql-chip:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(79,158,248,0.08);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  }
+
+  /* ── Exam Modal ── */
+  .exam-modal {
+    position: relative;
+    max-width: 420px;
+  }
+
+  .exam-modal-close {
+    position: absolute;
+    top: 16px; right: 16px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    font-size: 13px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    font-family: 'Sora', sans-serif;
+  }
+
+  .exam-modal-close:hover { color: var(--text); border-color: var(--muted); }
+
+  .exam-modal-icon { font-size: 36px; margin-bottom: 10px; }
+
+  .exam-preview-chips {
+    display: flex;
+    gap: 10px;
+    margin: 14px 0 20px;
+  }
+
+  .epc {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .epc-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .epc-val {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--accent);
+  }
+
+  .exam-selects { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+
+  .exam-field { display: flex; flex-direction: column; gap: 6px; }
+
+  .exam-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .exam-select {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-family: 'Sora', sans-serif;
+    font-size: 13px;
+    outline: none;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%237a90b0' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 32px;
+    transition: border-color 0.2s;
+    width: 100%;
+  }
+
+  .exam-select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(79,158,248,0.15); }
+
+  .exam-go-btn {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border: none;
+    border-radius: 10px;
+    color: white;
+    font-family: 'Sora', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 4px 18px rgba(79,158,248,0.3);
+    letter-spacing: 0.02em;
+  }
+
+  .exam-go-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(79,158,248,0.45); }
+  .exam-go-btn:active { transform: none; }
+
+  /* ── Performance Bar ── */
+  .perf-bar {
+    display: flex;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    margin-bottom: 22px;
+    animation: fadeUp 0.4s ease both;
+  }
+
+  .perf-item {
+    flex: 1;
+    padding: 16px 10px;
+    text-align: center;
+  }
+
+  .perf-val {
+    font-size: 22px;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    margin-bottom: 4px;
+    color: var(--text);
+  }
+
+  .perf-val.accent { color: var(--accent); }
+  .perf-val.green { color: var(--green); }
+  .perf-val.purple { color: #a78bfa; }
+
+  .perf-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+  }
+
+  .perf-divider {
+    width: 1px;
+    background: var(--border);
+    align-self: stretch;
+    margin: 12px 0;
+  }
+
+  /* ── History Header ── */
+  .history-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+
+  .history-loading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .spin-ring {
+    width: 14px; height: 14px;
+    border: 2px solid rgba(79,158,248,0.2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spinR 0.7s linear infinite;
+  }
+
+  @keyframes spinR { to { transform: rotate(360deg); } }
+
+  /* ── History Cards ── */
+  .history-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 12px;
+    margin-bottom: 6px;
+  }
+
+  .hcard {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px;
+    cursor: pointer;
+    transition: all 0.22s;
+    position: relative;
+    overflow: hidden;
+    animation: fadeUp 0.4s ease both;
+  }
+
+  .hcard::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+
+  .hcard.grade-a::before { background: linear-gradient(90deg, var(--green), transparent); }
+  .hcard.grade-b::before { background: linear-gradient(90deg, var(--accent), transparent); }
+  .hcard.grade-c::before { background: linear-gradient(90deg, var(--amber), transparent); }
+  .hcard.grade-d::before { background: linear-gradient(90deg, var(--red), transparent); }
+
+  .hcard:hover {
+    border-color: rgba(79,158,248,0.3);
+    transform: translateY(-4px);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.25);
+  }
+
+  .hcard-subject {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    margin-bottom: 6px;
+  }
+
+  .hcard-board {
+    font-size: 10px;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+
+  .hcard-score-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  .hcard-score-big {
+    font-size: 30px;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    line-height: 1;
+  }
+
+  .hcard-score-of {
+    font-size: 12px;
+    color: var(--muted);
+    padding-bottom: 3px;
+  }
+
+  .hcard-bar-wrap {
+    height: 4px;
+    background: var(--surface2);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 10px;
+  }
+
+  .hcard-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 1s cubic-bezier(0.4,0,0.2,1);
+  }
+
+  .hcard-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .hcard-grade {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 20px;
+  }
+
+  .grade-a .hcard-grade { background: rgba(16,185,129,0.12); color: var(--green); }
+  .grade-b .hcard-grade { background: rgba(79,158,248,0.12); color: var(--accent); }
+  .grade-c .hcard-grade { background: rgba(245,158,11,0.12); color: var(--amber); }
+  .grade-d .hcard-grade { background: rgba(239,68,68,0.12); color: var(--red); }
+
+  .history-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--muted);
+  }
+
+  /* ── Detail Modal ── */
+  .detail-modal {
+    max-width: 540px;
+    max-height: 88vh;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  .detail-header {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    margin-bottom: 24px;
+    padding-right: 24px;
+  }
+
+  .detail-subject-icon {
+    width: 52px; height: 52px;
+    background: linear-gradient(135deg, rgba(79,158,248,0.15), rgba(124,58,237,0.15));
+    border: 1px solid rgba(79,158,248,0.2);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    flex-shrink: 0;
+  }
+
+  .detail-title {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    margin-bottom: 4px;
+  }
+
+  .detail-meta-chips {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .dmc {
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+
+  /* Score spotlight */
+  .detail-score-spotlight {
+    background: linear-gradient(135deg, rgba(79,158,248,0.07), rgba(124,58,237,0.07));
+    border: 1px solid rgba(79,158,248,0.15);
+    border-radius: 14px;
+    padding: 22px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .detail-ring-wrap { flex-shrink: 0; }
+
+  .detail-ring {
+    position: relative;
+    width: 90px; height: 90px;
+  }
+
+  .detail-ring svg { transform: rotate(-90deg); width: 90px; height: 90px; }
+  .detail-ring circle { fill: none; stroke-width: 7; stroke-linecap: round; }
+  .detail-ring .dr-bg { stroke: var(--border); }
+  .detail-ring .dr-fill {
+    stroke-dasharray: 220;
+    stroke-dashoffset: 220;
+    transition: stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1);
+  }
+
+  .detail-ring-center {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+  }
+
+  .detail-ring-score { font-size: 20px; font-weight: 700; font-family: 'JetBrains Mono', monospace; line-height: 1; }
+  .detail-ring-of { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+  .detail-score-info { flex: 1; }
+
+  .detail-pct {
+    font-size: 32px;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .detail-verdict {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+
+  .detail-verdict-sub { font-size: 12px; color: var(--muted); }
+
+  /* History table for subject -->
+  .detail-section-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .detail-section-title::after { content: ''; flex:1; height:1px; background: var(--border); }
+
+  .detail-all-attempts {
+    display: grid;
+    gap: 8px;
+  }
+
+  .attempt-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+
+  .attempt-num {
+    width: 26px; height: 26px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+
+  .attempt-info { flex: 1; }
+
+  .attempt-date { font-size: 12px; color: var(--muted); margin-bottom: 2px; }
+  .attempt-board { font-size: 11px; color: var(--muted); }
+
+  .attempt-score {
+    font-size: 16px;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    flex-shrink: 0;
+  }
+
+  .attempt-bar-wrap {
+    width: 60px;
+    height: 4px;
+    background: var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .attempt-bar { height: 100%; border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar">
+  <div class="nav-left">
+    <div class="logo-icon">🎓</div>
+    <span class="logo-text">EduPortal</span>
+  </div>
+  <div class="nav-right">
+    <div class="nav-name">
+      <span id="nav-name-text">Loading...</span>
+      <div class="avatar" id="nav-avatar">?</div>
+    </div>
+    <button class="logout-btn" onclick="logout()">Logout</button>
+  </div>
+</nav>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- Greeting -->
+  <div class="greeting">
+    <div class="greeting-time" id="time-greeting">Good morning</div>
+    <div class="greeting-name">Hello, <span id="student-name">Student</span>! 👋</div>
+    <div class="greeting-sub" id="date-display">Loading date...</div>
+  </div>
+
+  <!-- Info chips -->
+  <div class="info-bar" id="info-bar"></div>
+
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat-card blue">
+      <div class="stat-icon">📋</div>
+      <div class="stat-num" id="stat-notices">3</div>
+      <div class="stat-label">Notices</div>
+    </div>
+    <div class="stat-card purple">
+      <div class="stat-icon">📚</div>
+      <div class="stat-num" id="stat-hw">4</div>
+      <div class="stat-label">Homework</div>
+    </div>
+    <div class="stat-card green">
+      <div class="stat-icon">✍️</div>
+      <div class="stat-num" id="stat-tests">2</div>
+      <div class="stat-label">Tests</div>
+    </div>
+  </div>
+
+  <!-- Tabs (desktop) -->
+  <div class="tabs" id="tabs">
+    <button class="tab active" onclick="switchTab('notices', this)">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="15" height="15"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+      Notices
+    </button>
+    <button class="tab" onclick="switchTab('homework', this)">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="15" height="15"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+      Homework
+    </button>
+    <button class="tab" onclick="switchTab('tests', this)">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="15" height="15"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      Tests
+    </button>
+  </div>
+
+  <!-- Panel: Notices -->
+  <div class="panel active" id="panel-notices">
+    <div class="item-card">
+      <div class="item-icon notice">📢</div>
+      <div class="item-body">
+        <div class="item-title">Annual Sports Day – Registration Open</div>
+        <div class="item-desc">All students are invited to register for Sports Day events. Last date for registration is March 20th. Contact your class teacher.</div>
+        <div class="item-meta">
+          <span class="badge blue">General</span>
+          <span class="badge green">Open</span>
+        </div>
+      </div>
+      <div class="item-date">Mar 10</div>
+    </div>
+    <div class="item-card">
+      <div class="item-icon urgent">⚠️</div>
+      <div class="item-body">
+        <div class="item-title">Exam Timetable Released</div>
+        <div class="item-desc">Term-end examination timetable has been published. Exams start April 5th. Check the school website for the full schedule.</div>
+        <div class="item-meta">
+          <span class="badge red">Urgent</span>
+          <span class="badge amber">Exam</span>
+        </div>
+      </div>
+      <div class="item-date">Mar 9</div>
+    </div>
+    <div class="item-card">
+      <div class="item-icon notice">📝</div>
+      <div class="item-body">
+        <div class="item-title">Parent-Teacher Meeting – March 22</div>
+        <div class="item-desc">PTM is scheduled for March 22nd between 9 AM – 1 PM. Parents must confirm attendance with the school office by March 18th.</div>
+        <div class="item-meta">
+          <span class="badge blue">Meeting</span>
+        </div>
+      </div>
+      <div class="item-date">Mar 8</div>
+    </div>
+  </div>
+
+  <!-- Panel: Homework -->
+  <div class="panel" id="panel-homework">
+    <div class="item-card">
+      <div class="item-icon hw">📐</div>
+      <div class="item-body">
+        <div class="item-title">Mathematics – Chapter 9 Exercises</div>
+        <div class="item-desc">Complete Exercise 9.1 to 9.3 from NCERT. Focus on integration by parts and substitution methods.</div>
+        <div class="item-meta">
+          <span class="badge amber">Due: Mar 13</span>
+          <span class="badge blue">Mathematics</span>
+        </div>
+      </div>
+      <div class="item-date">Mar 10</div>
+    </div>
+    <div class="item-card">
+      <div class="item-icon hw">🧪</div>
+      <div class="item-body">
+        <div class="item-title">Physics – Lab Report Submission</div>
+        <div class="item-desc">Write the lab report for the pendulum experiment conducted last Friday. Include observations, calculations, and conclusions.</div>
+        <div class="item-meta">
+          <span class="badge red">Due: Mar 12</span>
+          <span class="badge blue">Physics</span>
+        </div>
+      </div>
+      <div class="item-date">Mar 9</div>
+    </div>
+    <div class="item-card">
+      <div class="item-icon hw">📖</div>
+      <div class="item-body">
+        <div class="item-title">English – Essay Writing</div>
+        <div class="item-desc">Write a 500-word essay on "The Role of Technology in Modern Education". Submit in the notebook.</div>
+        <div class="item-meta">
+          <span class="badge amber">Due: Mar 15</span>
+          <span class="badge blue">English</span>
+        </div>
+      </div>
+      <div class="item-date">Mar 8</div>
+    </div>
+    <div class="item-card">
+      <div class="item-icon hw">⚗️</div>
+      <div class="item-body">
+        <div class="item-title">Chemistry – Periodic Table Revision</div>
+        <div class="item-desc">Revise groups 1–18 elements, their electronic configurations and periodic trends. Quiz next Monday.</div>
+        <div class="item-meta">
+          <span class="badge green">Due: Mar 17</span>
+          <span class="badge blue">Chemistry</span>
+        </div>
+      </div>
+      <div class="item-date">Mar 7</div>
+    </div>
+  </div>
+
+  <!-- Panel: Tests -->
+  <div class="panel" id="panel-tests">
+
+    <!-- Hero CTA -->
+    <div class="exam-hero">
+      <div class="exam-hero-glow"></div>
+      <div class="exam-hero-icon">🎯</div>
+      <div class="exam-hero-title">Ready to Test Your Knowledge?</div>
+      <div class="exam-hero-sub">Your name and class are already filled in — just pick a subject and go!</div>
+      <button class="exam-hero-btn" onclick="openExamLauncher()">
+        <span>Launch Exam</span>
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
+      </button>
+    </div>
+
+    <!-- Performance summary bar -->
+    <div class="perf-bar" id="perf-bar" style="display:none">
+      <div class="perf-item">
+        <div class="perf-val" id="perf-total">—</div>
+        <div class="perf-label">Tests Taken</div>
+      </div>
+      <div class="perf-divider"></div>
+      <div class="perf-item">
+        <div class="perf-val accent" id="perf-avg">—</div>
+        <div class="perf-label">Avg Score</div>
+      </div>
+      <div class="perf-divider"></div>
+      <div class="perf-item">
+        <div class="perf-val green" id="perf-best">—</div>
+        <div class="perf-label">Best Score</div>
+      </div>
+      <div class="perf-divider"></div>
+      <div class="perf-item">
+        <div class="perf-val purple" id="perf-subjects">—</div>
+        <div class="perf-label">Subjects</div>
+      </div>
+    </div>
+
+    <!-- History section label -->
+    <div class="history-header">
+      <div class="quick-launch-label" style="margin-bottom:0">Exam History</div>
+      <div class="history-loading" id="history-loading">
+        <div class="spin-ring"></div> Loading records…
+      </div>
+    </div>
+
+    <!-- History cards grid -->
+    <div class="history-grid" id="history-grid"></div>
+
+    <!-- Empty state -->
+    <div class="history-empty" id="history-empty" style="display:none">
+      <div style="font-size:36px;margin-bottom:10px">📭</div>
+      <div style="font-weight:600;margin-bottom:4px">No exams yet</div>
+      <div style="font-size:13px;color:var(--muted)">Take your first exam to see results here</div>
+    </div>
+
+    <!-- Quick-launch subject chips -->
+    <div class="quick-launch-label" style="margin-top:28px">Quick Launch</div>
+    <div class="quick-launch-grid">
+      <button class="ql-chip" onclick="quickLaunch('accountancy')">📒 Accountancy</button>
+      <button class="ql-chip" onclick="quickLaunch('economics')">📈 Economics</button>
+      <button class="ql-chip" onclick="quickLaunch('business_studies')">💼 Business Studies</button>
+
+    </div>
+  </div>
+
+</div>
+
+<!-- Mobile bottom nav -->
+<div class="bottom-nav" id="bottom-nav">
+  <button class="bnav-item active" onclick="switchTabMobile('notices', this)">
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+    Notices
+  </button>
+  <button class="bnav-item" onclick="switchTabMobile('homework', this)">
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+    Homework
+  </button>
+  <button class="bnav-item" onclick="switchTabMobile('tests', this)">
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+    Tests
+  </button>
+</div>
+
+<!-- EXAM DETAIL MODAL -->
+<div class="modal-overlay" id="detail-modal-overlay">
+  <div class="modal detail-modal">
+    <button class="exam-modal-close" onclick="closeDetailModal()">✕</button>
+    <div id="detail-modal-content"></div>
+  </div>
+</div>
+
+<!-- EXAM LAUNCHER MODAL -->
+<div class="modal-overlay" id="exam-modal-overlay">
+  <div class="modal exam-modal">
+    <button class="exam-modal-close" onclick="closeExamLauncher()">✕</button>
+    <div class="exam-modal-icon">🚀</div>
+    <div class="modal-title">Start Examination</div>
+    <div class="modal-sub" id="examModalSub">Logged in as <strong id="examStudentPreview">—</strong></div>
+
+    <!-- Student preview chips -->
+    <div class="exam-preview-chips">
+      <div class="epc"><span class="epc-label">Name</span><span class="epc-val" id="epcName">—</span></div>
+      <div class="epc"><span class="epc-label">Class</span><span class="epc-val" id="epcClass">—</span></div>
+    </div>
+
+    <!-- Board + Subject selects -->
+    <div class="exam-selects">
+      <div class="exam-field">
+        <label class="exam-label" for="examBoard">Board</label>
+        <select class="exam-select" id="examBoard">
+          <option value="cbse">CBSE</option>
+          <option value="wbchse">WBCHSE</option>
+          <option value="icse">ICSE</option>
+          <option value="state">State Board</option>
+        </select>
+      </div>
+      <div class="exam-field">
+        <label class="exam-label" for="examSubject">Subject</label>
+        <select class="exam-select" id="examSubject">
+          <option value="accountancy">Accountancy</option>
+          <option value="economics">Economics</option>
+          <option value="business_studies">Business Studies</option>
+          <option value="mathematics">Mathematics</option>
+          <option value="physics">Physics</option>
+          <option value="chemistry">Chemistry</option>
+          <option value="biology">Biology</option>
+          <option value="english">English</option>
+        </select>
+      </div>
+    </div>
+
+    <button class="exam-go-btn" onclick="goToExam()">
+      Begin Exam →
+    </button>
+  </div>
+</div>
+
+<script>
+// ── Auth guard ──
+const raw = sessionStorage.getItem('student');
+if (!raw) { window.location.href = 'index.html'; }
+const student = JSON.parse(raw || '{}');
+
+// ── Populate UI ──
+document.getElementById('student-name').textContent = student.name || 'Student';
+document.getElementById('nav-name-text').textContent = student.name || '';
+document.getElementById('nav-avatar').textContent = (student.name || 'S')[0].toUpperCase();
+
+const chips = [
+  { icon: `<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="13" height="13"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5"/></svg>`, label: `Class ${student.class || '-'}` },
+  { icon: `<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="13" height="13"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>`, label: student.stream || 'Stream' },
+  { icon: `<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="13" height="13"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0"/></svg>`, label: `ID: ${student.userid || '-'}` },
+];
+document.getElementById('info-bar').innerHTML = chips.map(c => `<div class="info-chip">${c.icon} ${c.label}</div>`).join('');
+
+// ── Date/Time ──
+function updateDateTime() {
+  const now = new Date();
+  const h = now.getHours();
+  const greet = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+  document.getElementById('time-greeting').textContent = greet;
+  document.getElementById('date-display').textContent = now.toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+}
+updateDateTime();
+setInterval(updateDateTime, 60000);
+
+// ── Tab switching ──
+function switchTab(name, el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('panel-' + name).classList.add('active');
+  document.querySelectorAll('.bnav-item').forEach((b,i) => {
+    b.classList.toggle('active', ['notices','homework','tests'][i] === name);
+  });
+}
+
+function switchTabMobile(name, el) {
+  document.querySelectorAll('.bnav-item').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('panel-' + name).classList.add('active');
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    t.classList.toggle('active', ['notices','homework','tests'][i] === name);
+  });
+}
+
+// ── Logout ──
+function logout() {
+  sessionStorage.removeItem('student');
+  window.location.href = 'index.html';
+}
+
+// ── Helpers ──
+const SUBJECT_ICONS = {
+  accountancy: '📒', economics: '📈', business_studies: '💼',
+  mathematics: '📐', physics: '⚡', chemistry: '🧪',
+  biology: '🌱', english: '📖'
+};
+const SUBJECT_LABELS = {
+  accountancy: 'Accountancy', economics: 'Economics', business_studies: 'Business Studies',
+  mathematics: 'Mathematics', physics: 'Physics', chemistry: 'Chemistry',
+  biology: 'Biology', english: 'English'
+};
+
+function gradeInfo(score, fm) {
+  const pct = (score / fm) * 100;
+  if (pct >= 80) return { cls: 'grade-a', label: 'A', color: 'var(--green)',  verdict: 'Excellent!',        bar: '#10b981' };
+  if (pct >= 60) return { cls: 'grade-b', label: 'B', color: 'var(--accent)', verdict: 'Good Job!',          bar: '#4f9ef8' };
+  if (pct >= 40) return { cls: 'grade-c', label: 'C', color: 'var(--amber)',  verdict: 'Keep Practising',    bar: '#f59e0b' };
+  return               { cls: 'grade-d', label: 'D', color: 'var(--red)',    verdict: 'Needs Improvement',  bar: '#ef4444' };
+}
+
+function formatDate(ts) {
+  return new Date(ts).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+// ── Load exam history from API ──
+async function loadExamHistory() {
+  const name = student.name || '';
+  if (!name) { hideLoading(); return; }
+  try {
+    const res = await fetch(`https://script.google.com/macros/s/AKfycbz8C2eaRYgDYQewK9tgzF3jkakFHSIu97g2w6kDiP0XF3qh2Scc6sMHpVwS4V_sIc6R/exec?name=${encodeURIComponent(name)}`);
+    const data = await res.json();
+    renderHistory(Array.isArray(data) ? data : []);
+  } catch(e) {
+    renderHistory([]);
+  }
+  hideLoading();
+}
+
+function hideLoading() {
+  const el = document.getElementById('history-loading');
+  if (el) el.style.display = 'none';
+}
+
+function renderHistory(records) {
+  const FM = 20;
+  document.getElementById('stat-tests').textContent = records.length;
+
+  if (records.length === 0) {
+    document.getElementById('history-empty').style.display = 'block';
+    document.getElementById('perf-bar').style.display = 'none';
+    return;
+  }
+
+  // Performance bar
+  const scores = records.map(r => r['score(fm-20)'] || 0);
+  const avg = scores.reduce((a,b) => a+b, 0) / scores.length;
+  const best = Math.max(...scores);
+  const subjects = [...new Set(records.map(r => r.subject))].length;
+
+  document.getElementById('perf-total').textContent = records.length;
+  document.getElementById('perf-avg').textContent = avg.toFixed(1) + '/20';
+  document.getElementById('perf-best').textContent = best + '/20';
+  document.getElementById('perf-subjects').textContent = subjects;
+  document.getElementById('perf-bar').style.display = 'flex';
+
+  // Group by subject — show latest attempt per subject card
+  const bySubject = {};
+  records.forEach(r => {
+    const s = r.subject;
+    if (!bySubject[s]) bySubject[s] = [];
+    bySubject[s].push(r);
+  });
+
+  const grid = document.getElementById('history-grid');
+  grid.innerHTML = '';
+
+  Object.entries(bySubject).forEach(([subject, attempts], idx) => {
+    const sorted = attempts.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+    const latest = sorted[0];
+    const score = latest['score(fm-20)'] || 0;
+    const pct = Math.round((score / FM) * 100);
+    const g = gradeInfo(score, FM);
+    const icon = SUBJECT_ICONS[subject] || '📄';
+    const label = SUBJECT_LABELS[subject] || subject;
+
+    const card = document.createElement('div');
+    card.className = `hcard ${g.cls}`;
+    card.style.animationDelay = `${idx * 0.07}s`;
+    card.onclick = () => openDetailModal(subject, attempts);
+
+    card.innerHTML = `
+      <div class="hcard-subject">${icon} ${label}</div>
+      <div class="hcard-board">${(latest.board || '').toUpperCase()} · Class ${latest.class || '—'}</div>
+      <div class="hcard-score-row">
+        <div class="hcard-score-big" style="color:${g.color}">${score}</div>
+        <div class="hcard-score-of">/ ${FM}</div>
+      </div>
+      <div class="hcard-bar-wrap">
+        <div class="hcard-bar-fill" style="width:${pct}%;background:${g.bar}"></div>
+      </div>
+      <div class="hcard-meta">
+        <span>${attempts.length} attempt${attempts.length > 1 ? 's' : ''} · ${formatDate(latest.timestamp)}</span>
+        <span class="hcard-grade">${g.label}</span>
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+}
+
+// ── Detail Modal ──
+function openDetailModal(subject, attempts) {
+  const FM = 20;
+  const icon = SUBJECT_ICONS[subject] || '📄';
+  const label = SUBJECT_LABELS[subject] || subject;
+  const sorted = [...attempts].sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+  const latest = sorted[0];
+  const latestScore = latest['score(fm-20)'] || 0;
+  const pct = Math.round((latestScore / FM) * 100);
+  const g = gradeInfo(latestScore, FM);
+  const circumference = 2 * Math.PI * 35;
+  const offset = circumference - (pct / 100) * circumference;
+  const avg = (attempts.reduce((a,r) => a + (r['score(fm-20)'] || 0), 0) / attempts.length).toFixed(1);
+  const best = Math.max(...attempts.map(r => r['score(fm-20)'] || 0));
+
+  document.getElementById('detail-modal-content').innerHTML = `
+    <div class="detail-header">
+      <div class="detail-subject-icon">${icon}</div>
+      <div>
+        <div class="detail-title">${label}</div>
+        <div class="detail-meta-chips">
+          <span class="dmc">${(latest.board || '').toUpperCase()}</span>
+          <span class="dmc">Class ${latest.class || '—'}</span>
+          <span class="dmc">${attempts.length} Attempt${attempts.length > 1 ? 's' : ''}</span>
+          <span class="dmc">Best: ${best}/20</span>
+          <span class="dmc">Avg: ${avg}/20</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="detail-score-spotlight">
+      <div class="detail-ring-wrap">
+        <div class="detail-ring">
+          <svg viewBox="0 0 90 90">
+            <circle class="dr-bg" cx="45" cy="45" r="35"/>
+            <circle class="dr-fill" id="dr-fill-anim" cx="45" cy="45" r="35"
+              stroke="${g.bar}"
+              style="stroke-dasharray:${circumference.toFixed(1)};stroke-dashoffset:${circumference.toFixed(1)}"/>
+          </svg>
+          <div class="detail-ring-center">
+            <div class="detail-ring-score" style="color:${g.color}">${latestScore}</div>
+            <div class="detail-ring-of">/ ${FM}</div>
+          </div>
+        </div>
+      </div>
+      <div class="detail-score-info">
+        <div class="detail-pct" style="color:${g.color}">${pct}%</div>
+        <div class="detail-verdict" style="color:${g.color}">${g.verdict}</div>
+        <div class="detail-verdict-sub">Latest · ${formatDate(latest.timestamp)}</div>
+      </div>
+    </div>
+
+    <div class="detail-section-title">All Attempts</div>
+    <div class="detail-all-attempts">
+      ${sorted.map((r, i) => {
+        const sc = r['score(fm-20)'] || 0;
+        const p = Math.round((sc / FM) * 100);
+        const rg = gradeInfo(sc, FM);
+        return `
+        <div class="attempt-row">
+          <div class="attempt-num">#${sorted.length - i}</div>
+          <div class="attempt-info">
+            <div class="attempt-date">${formatDate(r.timestamp)}</div>
+            <div class="attempt-board">${(r.board || '').toUpperCase()} · Class ${r.class || '—'}</div>
+          </div>
+          <div class="attempt-bar-wrap">
+            <div class="attempt-bar" style="width:${p}%;background:${rg.bar}"></div>
+          </div>
+          <div class="attempt-score" style="color:${rg.color}">${sc}<span style="font-size:11px;color:var(--muted);font-family:'Sora',sans-serif;font-weight:400">/20</span></div>
+          <div style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;background:${rg.cls==='grade-a'?'rgba(16,185,129,0.12)':rg.cls==='grade-b'?'rgba(79,158,248,0.12)':rg.cls==='grade-c'?'rgba(245,158,11,0.12)':'rgba(239,68,68,0.12)'};color:${rg.color}">${rg.label}</div>
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+
+  document.getElementById('detail-modal-overlay').classList.add('open');
+  setTimeout(() => {
+    const fill = document.getElementById('dr-fill-anim');
+    if (fill) fill.style.strokeDashoffset = offset.toFixed(1);
+  }, 80);
+}
+
+function closeDetailModal() {
+  document.getElementById('detail-modal-overlay').classList.remove('open');
+}
+
+document.getElementById('detail-modal-overlay').addEventListener('click', function(e) {
+  if (e.target === this) closeDetailModal();
+});
+
+// ── Exam Launcher ──
+function openExamLauncher(presetSubject) {
+  document.getElementById('epcName').textContent = student.name || '—';
+  document.getElementById('epcClass').textContent = `Class ${student.class || '—'}`;
+  document.getElementById('examStudentPreview').textContent = student.name || '—';
+  if (presetSubject) document.getElementById('examSubject').value = presetSubject;
+  document.getElementById('exam-modal-overlay').classList.add('open');
+}
+
+function closeExamLauncher() {
+  document.getElementById('exam-modal-overlay').classList.remove('open');
+}
+
+function quickLaunch(subject) { openExamLauncher(subject); }
+
+function goToExam() {
+  const board = document.getElementById('examBoard').value;
+  const subject = document.getElementById('examSubject').value;
+  window.location.href = `test.html?board=${encodeURIComponent(board)}&subject=${encodeURIComponent(subject)}`;
+}
+
+document.getElementById('exam-modal-overlay').addEventListener('click', function(e) {
+  if (e.target === this) closeExamLauncher();
+});
+
+// ── Boot ──
+loadExamHistory();
+</script>
+</body>
+</html>
