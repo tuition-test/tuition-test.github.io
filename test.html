@@ -1000,7 +1000,7 @@ async function submitTest() {
 
   questions.forEach((q, i) => {
     const selected = document.querySelector(`input[name=q${i}]:checked`);
-    const correctIdx = q.answer.charCodeAt(0) - 65;
+    const correctIdx = q.answer.trim().charCodeAt(0) - 65;
     const correctOpt = q.options[correctIdx];
     const opts = q.options;
 
@@ -1017,7 +1017,7 @@ async function submitTest() {
     });
 
     if (selected) {
-      if (selected.value === correctOpt) {
+      if (selected.value.trim() === correctOpt.trim()) {
         score++;
       } else {
         wrong++;
