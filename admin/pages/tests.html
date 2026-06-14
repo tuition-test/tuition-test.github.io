@@ -28,6 +28,7 @@
     </div>
   </div>
 
+  <!-- UPLOAD CARD -->
   <div class="card">
     <div class="card-title">Upload Questions via Excel</div>
     <p class="text-sm text-muted">
@@ -35,22 +36,40 @@
       <strong>Question ID, Chapter, Question, Option A, Option B, Option C, Option D, Correct Answer, Explanation, Subject, Class, Board</strong>.
       "Question ID" can be left blank — a unique ID will be auto-generated.
       "Correct Answer" must be A, B, C, or D. "Subject" must match an existing subject name.
+      Supports up to <strong>1,500 questions</strong> per upload.
     </p>
-    <div class="form-row" style="align-items:flex-end;">
+    <div class="form-row" style="align-items:flex-end;flex-wrap:wrap;gap:12px;">
       <div class="form-group mb-0">
         <label>Excel File (.xlsx)</label>
-        <input type="file" id="excel-file" accept=".xlsx,.xls" />
+        <input type="file" id="excel-file" accept=".xlsx,.xls" onchange="onFileSelected()" />
       </div>
       <div class="form-group mb-0">
         <button class="btn" onclick="downloadTemplate()">⬇ Download Template</button>
       </div>
       <div class="form-group mb-0">
-        <button class="btn btn-success" id="upload-btn" onclick="uploadExcel()">⬆ Upload Questions</button>
+        <button class="btn btn-success" id="upload-btn" onclick="uploadExcel()" disabled>⬆ Upload Questions</button>
+      </div>
+      <div class="form-group mb-0">
+        <button class="btn btn-danger" id="clear-btn" onclick="clearAllQuestions()">🗑 Clear All Questions</button>
       </div>
     </div>
+
+    <!-- Progress bar (hidden by default) -->
+    <div id="progress-wrap" style="display:none;margin-top:16px;">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+        <span class="text-sm font-bold" id="progress-label">Uploading…</span>
+        <span class="text-sm text-muted" id="progress-pct">0%</span>
+      </div>
+      <div style="background:#e5e7eb;border-radius:999px;height:10px;overflow:hidden;">
+        <div id="progress-bar" style="height:100%;width:0%;background:#22c55e;border-radius:999px;transition:width 0.3s;"></div>
+      </div>
+      <p class="text-sm text-muted mt-8" id="progress-detail"></p>
+    </div>
+
     <div id="upload-status" class="mt-16"></div>
   </div>
 
+  <!-- BREAKDOWNS -->
   <div class="card">
     <div class="card-title flex-between">
       <span>Questions per Subject</span>
@@ -65,12 +84,13 @@
     <div id="chapter-breakdown"><div class="spinner"></div></div>
   </div>
 
+  <!-- QUESTION TABLE -->
   <div class="card">
     <div class="card-title flex-between">
       <span>Question Bank</span>
       <div class="flex gap-8 flex-wrap">
         <select id="filter-subject" style="width:auto;"><option value="">All Subjects</option></select>
-        <input type="text" id="search-q" placeholder="Search question..." style="width:200px;" />
+        <input type="text" id="search-q" placeholder="Search question…" style="width:200px;" />
       </div>
     </div>
     <div class="table-wrap">
@@ -86,7 +106,7 @@
   </div>
 </div>
 
-<!-- VIEW/EDIT QUESTION MODAL -->
+<!-- EDIT MODAL -->
 <div class="modal-backdrop hidden" id="q-modal">
   <div class="modal">
     <div class="modal-header">
@@ -133,9 +153,16 @@
 <script src="../../shared/js/auth.js"></script>
 <script src="../../shared/js/utils.js"></script>
 <script>
-let allSubjects = [];
+// ─── Constants ───────────────────────────────────────────────────────────────
+const BATCH_SIZE  = 100;   // rows per INSERT call (Supabase safe limit)
+const MAX_ROWS    = 1500;  // maximum questions per upload
+const FETCH_PAGE  = 1000;  // Supabase max rows per SELECT call
+
+// ─── State ───────────────────────────────────────────────────────────────────
+let allSubjects  = [];
 let allQuestions = [];
 
+// ─── Init ────────────────────────────────────────────────────────────────────
 (async () => {
   const profile = await Auth.guard('admin');
   if (!profile) return;
@@ -157,53 +184,67 @@ let allQuestions = [];
   await loadQuestions();
 })();
 
+// ─── Load ALL questions (paginated to bypass 1000-row limit) ─────────────────
 async function loadQuestions() {
-  const { data, error } = await sb
-    .from('questions')
-    .select('*, subjects(name, board, class)')
-    .order('created_at', { ascending: false });
+  document.getElementById('q-tbody').innerHTML =
+    `<tr><td colspan="7" class="text-center"><div class="spinner"></div></td></tr>`;
 
-  if (error) {
-    Utils.toast('Error: ' + error.message, 'error');
-    return;
+  let allData = [];
+  let from    = 0;
+
+  while (true) {
+    const { data, error } = await sb
+      .from('questions')
+      .select('*, subjects(name, board, class)')
+      .order('created_at', { ascending: false })
+      .range(from, from + FETCH_PAGE - 1);
+
+    if (error) {
+      Utils.toast('Error loading questions: ' + error.message, 'error');
+      return;
+    }
+
+    if (!data || data.length === 0) break;
+    allData = allData.concat(data);
+    if (data.length < FETCH_PAGE) break;  // last page
+    from += FETCH_PAGE;
   }
 
-  allQuestions = data || [];
+  allQuestions = allData;
   renderStats();
   renderBreakdowns();
   renderQuestions();
 }
 
+// ─── Stats ───────────────────────────────────────────────────────────────────
 function renderStats() {
   document.getElementById('stat-total').textContent = allQuestions.length;
-
   const subjectIds = new Set(allQuestions.map(q => q.subject_id).filter(Boolean));
   document.getElementById('stat-subjects').textContent = subjectIds.size;
-
   const chapters = new Set(allQuestions.map(q => q.chapter).filter(Boolean));
   document.getElementById('stat-chapters').textContent = chapters.size;
 }
 
+// ─── Breakdowns ──────────────────────────────────────────────────────────────
 function renderBreakdowns() {
   // Per subject
   const subjectCounts = {};
   allQuestions.forEach(q => {
-    const name = q.subjects ? `${q.subjects.name} (${q.subjects.board} ${q.subjects.class})` : 'Unassigned';
+    const name = q.subjects
+      ? `${q.subjects.name} (${q.subjects.board} ${q.subjects.class})`
+      : 'Unassigned';
     subjectCounts[name] = (subjectCounts[name] || 0) + 1;
   });
 
   const subjectContainer = document.getElementById('subject-breakdown');
-  const subjectEntries = Object.entries(subjectCounts).sort((a,b) => b[1] - a[1]);
-  if (!subjectEntries.length) {
-    subjectContainer.innerHTML = `<div class="empty-state"><div class="icon">📊</div>No data</div>`;
-  } else {
-    subjectContainer.innerHTML = subjectEntries.map(([name, count]) => `
-      <div class="list-item flex-between">
-        <span>${Utils.escapeHtml(name)}</span>
-        <span class="chip">${count} questions</span>
-      </div>
-    `).join('');
-  }
+  const subjectEntries   = Object.entries(subjectCounts).sort((a, b) => b[1] - a[1]);
+  subjectContainer.innerHTML = subjectEntries.length
+    ? subjectEntries.map(([name, count]) => `
+        <div class="list-item flex-between">
+          <span>${Utils.escapeHtml(name)}</span>
+          <span class="chip">${count} questions</span>
+        </div>`).join('')
+    : `<div class="empty-state"><div class="icon">📊</div>No data</div>`;
 
   // Per chapter
   const chapterCounts = {};
@@ -213,28 +254,27 @@ function renderBreakdowns() {
   });
 
   const chapterContainer = document.getElementById('chapter-breakdown');
-  const chapterEntries = Object.entries(chapterCounts).sort((a,b) => b[1] - a[1]);
-  if (!chapterEntries.length) {
-    chapterContainer.innerHTML = `<div class="empty-state"><div class="icon">📊</div>No data</div>`;
-  } else {
-    chapterContainer.innerHTML = chapterEntries.map(([name, count]) => `
-      <div class="list-item flex-between">
-        <span>${Utils.escapeHtml(name)}</span>
-        <span class="chip">${count} questions</span>
-      </div>
-    `).join('');
-  }
+  const chapterEntries   = Object.entries(chapterCounts).sort((a, b) => b[1] - a[1]);
+  chapterContainer.innerHTML = chapterEntries.length
+    ? chapterEntries.map(([name, count]) => `
+        <div class="list-item flex-between">
+          <span>${Utils.escapeHtml(name)}</span>
+          <span class="chip">${count} questions</span>
+        </div>`).join('')
+    : `<div class="empty-state"><div class="icon">📚</div>No data</div>`;
 }
 
+// ─── Question table ───────────────────────────────────────────────────────────
 function renderQuestions() {
   const subjectFilter = document.getElementById('filter-subject').value;
-  const search = document.getElementById('search-q').value.trim().toLowerCase();
+  const search        = document.getElementById('search-q').value.trim().toLowerCase();
 
   let filtered = allQuestions;
   if (subjectFilter) filtered = filtered.filter(q => q.subject_id === subjectFilter);
-  if (search) filtered = filtered.filter(q => q.question.toLowerCase().includes(search));
+  if (search)        filtered = filtered.filter(q => q.question.toLowerCase().includes(search));
 
   const tbody = document.getElementById('q-tbody');
+
   if (!filtered.length) {
     tbody.innerHTML = `<tr><td colspan="7" class="text-center">No questions found</td></tr>`;
     return;
@@ -242,56 +282,55 @@ function renderQuestions() {
 
   tbody.innerHTML = filtered.slice(0, 200).map(q => `
     <tr>
-      <td><code>${q.question_code}</code></td>
+      <td><code>${Utils.escapeHtml(q.question_code || '-')}</code></td>
       <td>${q.subjects ? Utils.escapeHtml(q.subjects.name) : '-'}</td>
       <td>${q.class || '-'}</td>
       <td>${Utils.escapeHtml(q.chapter || '-')}</td>
-      <td style="max-width:300px;">${Utils.escapeHtml(q.question.substring(0, 80))}${q.question.length > 80 ? '...' : ''}</td>
+      <td style="max-width:300px;">${Utils.escapeHtml(q.question.substring(0, 80))}${q.question.length > 80 ? '…' : ''}</td>
       <td><span class="badge badge-active">${q.correct_answer}</span></td>
       <td>
         <div class="flex gap-8">
           <button class="btn btn-sm btn-outline" onclick="editQuestion('${q.id}')">Edit</button>
-          <button class="btn btn-sm btn-danger" onclick="deleteQuestion('${q.id}')">Delete</button>
+          <button class="btn btn-sm btn-danger"  onclick="deleteQuestion('${q.id}')">Delete</button>
         </div>
       </td>
-    </tr>
-  `).join('');
+    </tr>`).join('');
 
   if (filtered.length > 200) {
-    tbody.innerHTML += `<tr><td colspan="7" class="text-center text-muted">Showing first 200 of ${filtered.length} results. Use search/filter to narrow down.</td></tr>`;
+    tbody.innerHTML += `<tr><td colspan="7" class="text-center text-muted">
+      Showing first 200 of ${filtered.length} results. Use search/filter to narrow down.
+    </td></tr>`;
   }
 }
 
+// ─── Edit / Delete single question ───────────────────────────────────────────
 function editQuestion(id) {
   const q = allQuestions.find(x => x.id === id);
   if (!q) return;
-
-  document.getElementById('q-id').value = q.id;
-  document.getElementById('q-question').value = q.question;
-  document.getElementById('q-chapter').value = q.chapter || '';
-  document.getElementById('q-a').value = q.option_a || '';
-  document.getElementById('q-b').value = q.option_b || '';
-  document.getElementById('q-c').value = q.option_c || '';
-  document.getElementById('q-d').value = q.option_d || '';
-  document.getElementById('q-correct').value = q.correct_answer || 'A';
+  document.getElementById('q-id').value          = q.id;
+  document.getElementById('q-question').value    = q.question;
+  document.getElementById('q-chapter').value     = q.chapter || '';
+  document.getElementById('q-a').value           = q.option_a || '';
+  document.getElementById('q-b').value           = q.option_b || '';
+  document.getElementById('q-c').value           = q.option_c || '';
+  document.getElementById('q-d').value           = q.option_d || '';
+  document.getElementById('q-correct').value     = q.correct_answer || 'A';
   document.getElementById('q-explanation').value = q.explanation || '';
-
   document.getElementById('q-modal').classList.remove('hidden');
 }
 
 document.getElementById('q-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const id = document.getElementById('q-id').value;
-
   const updates = {
-    question: document.getElementById('q-question').value.trim(),
-    chapter: document.getElementById('q-chapter').value.trim(),
-    option_a: document.getElementById('q-a').value.trim(),
-    option_b: document.getElementById('q-b').value.trim(),
-    option_c: document.getElementById('q-c').value.trim(),
-    option_d: document.getElementById('q-d').value.trim(),
+    question:       document.getElementById('q-question').value.trim(),
+    chapter:        document.getElementById('q-chapter').value.trim(),
+    option_a:       document.getElementById('q-a').value.trim(),
+    option_b:       document.getElementById('q-b').value.trim(),
+    option_c:       document.getElementById('q-c').value.trim(),
+    option_d:       document.getElementById('q-d').value.trim(),
     correct_answer: document.getElementById('q-correct').value,
-    explanation: document.getElementById('q-explanation').value.trim()
+    explanation:    document.getElementById('q-explanation').value.trim()
   };
 
   const { error } = await sb.from('questions').update(updates).eq('id', id);
@@ -315,130 +354,278 @@ async function deleteQuestion(id) {
   }
 }
 
-// ---------------------------------------------------------------
-// EXCEL TEMPLATE DOWNLOAD
-// ---------------------------------------------------------------
+// ─── Clear ALL questions ──────────────────────────────────────────────────────
+async function clearAllQuestions() {
+  const total = allQuestions.length;
+  if (total === 0) { Utils.toast('No questions to delete', 'warning'); return; }
+
+  const confirmed = confirm(
+    `⚠️ WARNING: This will permanently delete ALL ${total} questions from the database.\n\nThis cannot be undone. Are you sure?`
+  );
+  if (!confirmed) return;
+
+  const btn = document.getElementById('clear-btn');
+  btn.disabled    = true;
+  btn.textContent = 'Deleting…';
+
+  // Delete in batches using the id list to avoid RLS full-table issues
+  const ids = allQuestions.map(q => q.id);
+  let deletedCount = 0;
+
+  for (let start = 0; start < ids.length; start += BATCH_SIZE) {
+    const chunk = ids.slice(start, start + BATCH_SIZE);
+    const { error } = await sb.from('questions').delete().in('id', chunk);
+    if (error) {
+      Utils.toast('Delete error: ' + error.message, 'error');
+      btn.disabled    = false;
+      btn.textContent = '🗑 Clear All Questions';
+      return;
+    }
+    deletedCount += chunk.length;
+  }
+
+  Utils.toast(`${deletedCount} questions deleted`, 'success');
+  btn.disabled    = false;
+  btn.textContent = '🗑 Clear All Questions';
+  await loadQuestions();
+}
+
+// ─── Excel Template Download ──────────────────────────────────────────────────
 function downloadTemplate() {
   const headers = [
-    'Question ID', 'Chapter', 'Question', 'Option A', 'Option B', 'Option C', 'Option D',
-    'Correct Answer', 'Explanation', 'Subject', 'Class', 'Board'
+    'Question ID','Chapter','Question',
+    'Option A','Option B','Option C','Option D',
+    'Correct Answer','Explanation','Subject','Class','Board'
   ];
   const sampleRow = [
-    '', 'Chapter 1: Basics', 'What is the full form of GST?',
-    'Goods and Services Tax', 'General Sales Tax', 'Government Service Tax', 'Gross Sales Tax',
-    'A', 'GST stands for Goods and Services Tax, introduced in India in 2017.',
-    'Accountancy', 'Class 11', 'CBSE'
+    '','Chapter 1: Basics','What is the full form of GST?',
+    'Goods and Services Tax','General Sales Tax','Government Service Tax','Gross Sales Tax',
+    'A','GST stands for Goods and Services Tax, introduced in India in 2017.',
+    'Accountancy','Class 11','CBSE'
   ];
-
   const ws = XLSX.utils.aoa_to_sheet([headers, sampleRow]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Questions');
   XLSX.writeFile(wb, 'question_bank_template.xlsx');
 }
 
-// ---------------------------------------------------------------
-// EXCEL UPLOAD / PARSE
-// ---------------------------------------------------------------
+// ─── File selected — enable upload button & show preview count ────────────────
+function onFileSelected() {
+  const file = document.getElementById('excel-file').files[0];
+  const btn  = document.getElementById('upload-btn');
+  const statusEl = document.getElementById('upload-status');
+
+  if (!file) { btn.disabled = true; return; }
+
+  // Quick row-count preview (no full parse yet)
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const wb   = XLSX.read(e.target.result);
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
+
+      if (rows.length === 0) {
+        statusEl.innerHTML = `<p class="error-text">❌ File has no data rows.</p>`;
+        btn.disabled = true;
+        return;
+      }
+
+      if (rows.length > MAX_ROWS) {
+        statusEl.innerHTML = `<p class="error-text">❌ File has ${rows.length} rows — maximum allowed is ${MAX_ROWS}. Please split the file.</p>`;
+        btn.disabled = true;
+        return;
+      }
+
+      if (rows.length < 100) {
+        statusEl.innerHTML = `<p style="color:#f59e0b;">⚠️ File has only ${rows.length} rows. Minimum recommended is 100.</p>`;
+      } else {
+        statusEl.innerHTML = `<p style="color:#22c55e;">✅ ${rows.length} rows detected — ready to upload.</p>`;
+      }
+
+      btn.disabled = false;
+    } catch {
+      statusEl.innerHTML = `<p class="error-text">❌ Could not read the file. Make sure it's a valid .xlsx file.</p>`;
+      btn.disabled = true;
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ─── Progress helpers ─────────────────────────────────────────────────────────
+function showProgress(label, pct, detail) {
+  document.getElementById('progress-wrap').style.display = 'block';
+  document.getElementById('progress-label').textContent  = label;
+  document.getElementById('progress-pct').textContent    = pct + '%';
+  document.getElementById('progress-bar').style.width    = pct + '%';
+  document.getElementById('progress-detail').textContent = detail || '';
+}
+function hideProgress() {
+  document.getElementById('progress-wrap').style.display = 'none';
+}
+
+// ─── Main Upload Function ─────────────────────────────────────────────────────
 async function uploadExcel() {
   const fileInput = document.getElementById('excel-file');
-  const file = fileInput.files[0];
-  const statusEl = document.getElementById('upload-status');
-  const btn = document.getElementById('upload-btn');
+  const file      = fileInput.files[0];
+  const statusEl  = document.getElementById('upload-status');
+  const btn       = document.getElementById('upload-btn');
 
-  if (!file) {
-    Utils.toast('Please select an Excel file', 'warning');
-    return;
-  }
+  if (!file) { Utils.toast('Please select an Excel file', 'warning'); return; }
 
-  btn.disabled = true;
-  btn.textContent = 'Processing...';
-  statusEl.innerHTML = '<div class="spinner"></div>';
+  btn.disabled    = true;
+  btn.textContent = 'Processing…';
+  statusEl.innerHTML = '';
+  showProgress('Reading file…', 0, '');
 
   try {
-    const data = await file.arrayBuffer();
-    const workbook = XLSX.read(data);
-    const sheetName = workbook.SheetNames[0];
-    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
+    // ── Step 1: Parse Excel ──────────────────────────────────────────────────
+    const buffer   = await file.arrayBuffer();
+    const workbook = XLSX.read(buffer);
+    const rows     = XLSX.utils.sheet_to_json(
+      workbook.Sheets[workbook.SheetNames[0]], { defval: '' }
+    );
 
     if (!rows.length) {
       statusEl.innerHTML = `<p class="error-text">No rows found in the spreadsheet.</p>`;
+      hideProgress();
+      return;
+    }
+    if (rows.length > MAX_ROWS) {
+      statusEl.innerHTML = `<p class="error-text">❌ ${rows.length} rows exceeds the ${MAX_ROWS} question limit. Please split the file.</p>`;
+      hideProgress();
       return;
     }
 
-    let success = 0, failed = 0;
-    const errors = [];
+    showProgress('Validating rows…', 5, `${rows.length} rows found`);
+
+    // ── Step 2: Validate & build payload ────────────────────────────────────
+    let failed = 0;
+    const errors  = [];
+    const batch   = [];   // validated rows ready for insert
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
 
-      const subjectName = String(row['Subject'] || '').trim();
-      const className = String(row['Class'] || '').trim();
-      const boardName = String(row['Board'] || '').trim();
-      const correctAns = String(row['Correct Answer'] || '').trim().toUpperCase();
-      const questionText = String(row['Question'] || '').trim();
+      const subjectName  = String(row['Subject']        || '').trim();
+      const className    = String(row['Class']          || '').trim();
+      const boardName    = String(row['Board']          || '').trim();
+      const correctAns   = String(row['Correct Answer'] || '').trim().toUpperCase();
+      const questionText = String(row['Question']       || '').trim();
 
-      if (!questionText) { failed++; errors.push(`Row ${i+2}: Missing question text`); continue; }
-      if (!['A','B','C','D'].includes(correctAns)) { failed++; errors.push(`Row ${i+2}: Invalid correct answer "${row['Correct Answer']}"`); continue; }
+      if (!questionText) {
+        failed++;
+        errors.push(`Row ${i + 2}: Missing question text`);
+        continue;
+      }
+      if (!['A','B','C','D'].includes(correctAns)) {
+        failed++;
+        errors.push(`Row ${i + 2}: Invalid correct answer "${row['Correct Answer']}"`);
+        continue;
+      }
 
-      // Find matching subject
       const subject = allSubjects.find(s =>
         s.name.toLowerCase() === subjectName.toLowerCase() &&
-        s.class === className &&
-        s.board === boardName
+        s.class  === className &&
+        s.board  === boardName
       );
-
       if (!subject) {
         failed++;
-        errors.push(`Row ${i+2}: Subject "${subjectName}" (${boardName} ${className}) not found`);
+        errors.push(`Row ${i + 2}: Subject "${subjectName}" (${boardName} ${className}) not found`);
         continue;
       }
 
       const payload = {
-        chapter: String(row['Chapter'] || '').trim(),
-        question: questionText,
-        option_a: String(row['Option A'] || '').trim(),
-        option_b: String(row['Option B'] || '').trim(),
-        option_c: String(row['Option C'] || '').trim(),
-        option_d: String(row['Option D'] || '').trim(),
+        chapter:        String(row['Chapter']     || '').trim(),
+        question:       questionText,
+        option_a:       String(row['Option A']    || '').trim(),
+        option_b:       String(row['Option B']    || '').trim(),
+        option_c:       String(row['Option C']    || '').trim(),
+        option_d:       String(row['Option D']    || '').trim(),
         correct_answer: correctAns,
-        explanation: String(row['Explanation'] || '').trim(),
-        subject_id: subject.id,
-        class: className,
-        board: boardName
+        explanation:    String(row['Explanation'] || '').trim(),
+        subject_id:     subject.id,
+        class:          className,
+        board:          boardName
       };
 
-      // If Question ID provided and unique, use it
+      // Use provided Question ID if given
       const providedId = String(row['Question ID'] || '').trim();
-      if (providedId) {
-        const { data: existing } = await sb.from('questions').select('id').eq('question_code', providedId).maybeSingle();
-        if (!existing) payload.question_code = providedId;
-      }
+      if (providedId) payload.question_code = providedId;
 
-      const { error } = await sb.from('questions').insert(payload);
+      batch.push(payload);
+    }
+
+    if (batch.length === 0) {
+      statusEl.innerHTML = `<p class="error-text">❌ No valid questions to upload. Check errors below.</p>`;
+      renderErrors(errors);
+      hideProgress();
+      return;
+    }
+
+    // ── Step 3: Batch insert (100 rows per call) ─────────────────────────────
+    const totalChunks = Math.ceil(batch.length / BATCH_SIZE);
+    let   success     = 0;
+
+    for (let chunkIdx = 0; chunkIdx < totalChunks; chunkIdx++) {
+      const start = chunkIdx * BATCH_SIZE;
+      const chunk = batch.slice(start, start + BATCH_SIZE);
+
+      const pct    = Math.round(10 + ((chunkIdx / totalChunks) * 85));
+      const done   = Math.min(start + BATCH_SIZE, batch.length);
+      const detail = `Inserting rows ${start + 1}–${done} of ${batch.length}  (batch ${chunkIdx + 1} of ${totalChunks})`;
+      showProgress('Uploading to database…', pct, detail);
+
+      const { error } = await sb.from('questions').insert(chunk);
+
       if (error) {
-        failed++;
-        errors.push(`Row ${i+2}: ${error.message}`);
+        failed += chunk.length;
+        errors.push(`Batch ${chunkIdx + 1} (rows ${start + 1}–${done}): ${error.message}`);
       } else {
-        success++;
+        success += chunk.length;
       }
     }
 
-    let html = `<p class="font-bold">Upload complete: ${success} added, ${failed} failed.</p>`;
-    if (errors.length) {
-      html += `<div class="text-sm error-text" style="max-height:150px;overflow-y:auto;margin-top:8px;">${errors.map(e => `<div>${Utils.escapeHtml(e)}</div>`).join('')}</div>`;
-    }
-    statusEl.innerHTML = html;
+    // ── Step 4: Done ─────────────────────────────────────────────────────────
+    showProgress('Complete!', 100, '');
+    setTimeout(hideProgress, 1500);
 
-    Utils.toast(`${success} questions added`, success > 0 ? 'success' : 'warning');
+    const color  = failed === 0 ? '#22c55e' : '#f59e0b';
+    const icon   = failed === 0 ? '✅' : '⚠️';
+    statusEl.innerHTML = `
+      <p class="font-bold" style="color:${color};">
+        ${icon} Upload complete: <strong>${success}</strong> added, <strong>${failed}</strong> failed.
+      </p>`;
+
+    if (errors.length) renderErrors(errors);
+
+    Utils.toast(`${success} questions uploaded`, success > 0 ? 'success' : 'warning');
     fileInput.value = '';
+    btn.disabled = true;
     await loadQuestions();
+
   } catch (err) {
+    hideProgress();
     statusEl.innerHTML = `<p class="error-text">Error: ${Utils.escapeHtml(err.message)}</p>`;
     Utils.toast('Upload failed: ' + err.message, 'error');
   } finally {
-    btn.disabled = false;
+    btn.disabled    = false;
     btn.textContent = '⬆ Upload Questions';
   }
+}
+
+// ─── Render error list ────────────────────────────────────────────────────────
+function renderErrors(errors) {
+  const statusEl = document.getElementById('upload-status');
+  statusEl.innerHTML += `
+    <details style="margin-top:8px;">
+      <summary class="text-sm font-bold" style="cursor:pointer;color:#ef4444;">
+        Show ${errors.length} error(s)
+      </summary>
+      <div class="text-sm error-text"
+           style="max-height:180px;overflow-y:auto;margin-top:6px;padding:8px;background:#fef2f2;border-radius:6px;">
+        ${errors.map(e => `<div style="padding:2px 0;">• ${Utils.escapeHtml(e)}</div>`).join('')}
+      </div>
+    </details>`;
 }
 </script>
 </body>
