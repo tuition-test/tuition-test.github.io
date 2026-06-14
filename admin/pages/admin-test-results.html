@@ -269,8 +269,11 @@ async function openDetail(attemptId) {
   document.getElementById('modal-review').innerHTML = '<div class="spinner"></div>';
   modal.classList.add('show');
 
-  // Load questions
-  const questionIds = attempt.question_ids || [];
+  // Load questions — fall back to answer keys for old attempts that didn't store question_ids
+  let questionIds = attempt.question_ids || [];
+  if (!questionIds.length) {
+    questionIds = Object.keys(attempt.answers || {});
+  }
   if (!questionIds.length) {
     document.getElementById('modal-review').innerHTML = '<div class="text-muted text-sm">Question data not available for this attempt.</div>';
     return;
