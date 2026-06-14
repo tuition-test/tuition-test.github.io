@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="base-path" content="../../" />
+<title>Test Results - Admin</title>
+<link rel="stylesheet" href="../../shared/css/styles.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+/* ── Filters Bar ── */
+.filter-bar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:18px; }
+.filter-bar select, .filter-bar input { flex:1; min-width:140px; max-width:220px; }
+.filter-bar .count-chip { padding:5px 14px; border-radius:20px; background:var(--primary); color:#fff; font-size:12px; font-weight:700; white-space:nowrap; }
+
+/* ── Results Table ── */
+.results-header-row { display:grid; grid-template-columns:2fr 1.5fr 1fr 1fr 80px; gap:10px; padding:8px 14px; border-bottom:2px solid var(--border); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted); }
+.result-row { display:grid; grid-template-columns:2fr 1.5fr 1fr 1fr 80px; gap:10px; padding:12px 14px; border-bottom:1px solid var(--border); align-items:center; cursor:pointer; transition:background .15s; }
+.result-row:hover { background:rgba(99,102,241,.04); }
+.result-row:last-child { border-bottom:none; }
+
+/* Score badge */
+.score-pill { display:inline-block; padding:4px 12px; border-radius:20px; font-size:13px; font-weight:700; }
+.score-pill.good { background:#d1fae5; color:#065f46; }
+.score-pill.mid  { background:#fef3c7; color:#92400e; }
+.score-pill.low  { background:#fee2e2; color:#991b1b; }
+
+/* Student name cell */
+.stud-cell { display:flex; align-items:center; gap:10px; }
+.avatar { width:34px; height:34px; border-radius:50%; background:var(--primary); color:#fff; display:grid; place-items:center; font-size:13px; font-weight:700; flex-shrink:0; }
+
+/* ── Stats Summary ── */
+.admin-stats { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px; margin-bottom:20px; }
+.admin-stat { background:var(--card-bg); border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; }
+.admin-stat .val { font-size:24px; font-weight:800; color:var(--primary); }
+.admin-stat .lbl { font-size:11px; color:var(--text-muted); margin-top:3px; }
+
+/* ── Modal ── */
+.modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:1000; display:grid; place-items:center; padding:16px; opacity:0; transition:opacity .22s; pointer-events:none; }
+.modal-backdrop.show { opacity:1; pointer-events:all; }
+.modal { background:var(--card-bg); border-radius:16px; width:100%; max-width:640px; max-height:90vh; overflow-y:auto; transform:translateY(20px) scale(.97); transition:transform .22s; }
+.modal-backdrop.show .modal { transform:translateY(0) scale(1); }
+.modal-header { padding:18px 20px 14px; border-bottom:1px solid var(--border); display:flex; align-items:flex-start; justify-content:space-between; position:sticky; top:0; background:var(--card-bg); z-index:1; border-radius:16px 16px 0 0; }
+.modal-close { background:none; border:none; font-size:20px; cursor:pointer; color:var(--text-muted); padding:2px 6px; border-radius:6px; }
+.modal-close:hover { background:var(--border); }
+.modal-body { padding:20px; }
+
+/* ── Review cards in modal ── */
+.review-card { border:1px solid var(--border); border-radius:var(--radius); margin-bottom:10px; overflow:hidden; }
+.review-card-header { display:flex; align-items:flex-start; gap:10px; padding:12px 14px; cursor:pointer; }
+.rv-badge { min-width:28px; height:28px; border-radius:50%; display:grid; place-items:center; font-size:12px; font-weight:700; flex-shrink:0; }
+.rv-badge.correct { background:#d1fae5; color:#065f46; }
+.rv-badge.wrong   { background:#fee2e2; color:#991b1b; }
+.review-card-body { padding:0 14px 12px; display:none; border-top:1px solid var(--border); }
+.review-card.open .review-card-body { display:block; }
+.rv-option { padding:7px 10px; border-radius:8px; font-size:12px; margin-top:5px; display:flex; align-items:center; gap:7px; }
+.rv-option.your-answer.correct { background:#d1fae5; color:#065f46; font-weight:600; }
+.rv-option.your-answer.wrong   { background:#fee2e2; color:#991b1b; font-weight:600; }
+.rv-option.correct-ans  { background:#d1fae5; color:#065f46; }
+.explanation-box { margin-top:8px; padding:9px 11px; background:rgba(99,102,241,.07); border-left:3px solid var(--primary); border-radius:0 8px 8px 0; font-size:12px; line-height:1.5; display:none; }
+
+/* ── Score summary strip ── */
+.score-strip { display:flex; gap:10px; margin-bottom:16px; }
+.score-strip .tile { flex:1; padding:10px 12px; border-radius:10px; text-align:center; }
+.score-strip .tile .v { font-size:22px; font-weight:800; }
+.score-strip .tile .l { font-size:11px; opacity:.75; }
+.score-strip .pass-bg  { background:#d1fae5; color:#065f46; }
+.score-strip .fail-bg  { background:#fee2e2; color:#991b1b; }
+.score-strip .skip-bg  { background:#fef3c7; color:#92400e; }
+.score-strip .total-bg { background:rgba(99,102,241,.1); color:var(--primary); }
+
+/* Animations */
+@keyframes fadeSlideIn { from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)} }
+.animate-in { animation:fadeSlideIn .28s ease both; }
+
+/* Responsive */
+@media(max-width:640px){
+  .results-header-row,.result-row { grid-template-columns:1fr auto; }
+  .results-header-row .hide-sm,.result-row .hide-sm { display:none; }
+  .filter-bar select,.filter-bar input { max-width:100%; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+  <h2>📊 Student Test Results</h2>
+  <p class="text-muted text-sm">All test submissions from every student — click any row to see the full response review.</p>
+
+  <!-- Summary Stats -->
+  <div class="admin-stats" id="admin-stats">
+    <div class="admin-stat"><div class="val" id="as-total">—</div><div class="lbl">Total Submissions</div></div>
+    <div class="admin-stat"><div class="val" id="as-students">—</div><div class="lbl">Unique Students</div></div>
+    <div class="admin-stat"><div class="val" id="as-avg">—</div><div class="lbl">Average Score</div></div>
+    <div class="admin-stat"><div class="val" id="as-pass">—</div><div class="lbl">Pass Rate (≥40%)</div></div>
+  </div>
+
+  <!-- Filters -->
+  <div class="filter-bar">
+    <input type="text" id="f-search" placeholder="🔍 Search student name…" oninput="applyFilters()" />
+    <select id="f-subject" onchange="applyFilters()"><option value="">All Subjects</option></select>
+    <select id="f-score" onchange="applyFilters()">
+      <option value="">All Scores</option>
+      <option value="high">High (≥80%)</option>
+      <option value="mid">Medium (40–79%)</option>
+      <option value="low">Low (&lt;40%)</option>
+    </select>
+    <div class="count-chip" id="count-chip">0 results</div>
+  </div>
+
+  <!-- Results List -->
+  <div class="card" style="padding:0;overflow:hidden;">
+    <div class="results-header-row">
+      <div>Student</div>
+      <div class="hide-sm">Subject · Chapters</div>
+      <div>Date</div>
+      <div>Score</div>
+      <div>Time</div>
+    </div>
+    <div id="results-list"><div class="spinner" style="padding:30px;text-align:center;"></div></div>
+  </div>
+</div>
+
+<!-- Detail Modal -->
+<div class="modal-backdrop" id="detail-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <div style="font-weight:700;font-size:16px;" id="modal-student-name">Student</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:2px;" id="modal-meta"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="score-strip" id="modal-score-strip"></div>
+      <div style="font-weight:700;font-size:13px;margin-bottom:10px;">Response Review</div>
+      <div id="modal-review"></div>
+    </div>
+  </div>
+</div>
+
+<script src="../../shared/js/supabase-client.js"></script>
+<script src="../../shared/js/auth.js"></script>
+<script src="../../shared/js/utils.js"></script>
+<script>
+let allAttempts = [];
+let filteredAttempts = [];
+
+(async () => {
+  const profile = await Auth.guard('admin');
+  if (!profile) return;
+
+  // Load all attempts with student + subject info
+  const { data, error } = await sb
+    .from('student_test_attempts')
+    .select('*, profiles(name, board, class, username), subjects(name)')
+    .order('submitted_at', { ascending: false })
+    .limit(500);
+
+  if (error) { Utils.toast('Failed to load results: ' + error.message, 'error'); return; }
+  allAttempts = data || [];
+
+  // Populate subject filter
+  const subNames = [...new Set(allAttempts.map(a=>a.subjects?.name).filter(Boolean))].sort();
+  const sel = document.getElementById('f-subject');
+  subNames.forEach(n => {
+    const o = document.createElement('option'); o.value = n; o.textContent = n; sel.appendChild(o);
+  });
+
+  // Summary stats
+  const total = allAttempts.length;
+  const uniqueStudents = new Set(allAttempts.map(a=>a.student_id)).size;
+  const avg = total ? Math.round(allAttempts.reduce((s,a)=>s+a.score,0)/total) : 0;
+  const passCount = allAttempts.filter(a=>a.score>=40).length;
+  const passRate = total ? Math.round((passCount/total)*100) : 0;
+
+  document.getElementById('as-total').textContent = total;
+  document.getElementById('as-students').textContent = uniqueStudents;
+  document.getElementById('as-avg').textContent = avg + '%';
+  document.getElementById('as-pass').textContent = passRate + '%';
+
+  applyFilters();
+})();
+
+// ─── Filters ──────────────────────────────────────────────
+function applyFilters() {
+  const search = document.getElementById('f-search').value.toLowerCase();
+  const subFilter = document.getElementById('f-subject').value;
+  const scoreFilter = document.getElementById('f-score').value;
+
+  filteredAttempts = allAttempts.filter(a => {
+    const name = (a.profiles?.name || '').toLowerCase();
+    const subName = a.subjects?.name || '';
+    const sc = a.score;
+    if (search && !name.includes(search)) return false;
+    if (subFilter && subName !== subFilter) return false;
+    if (scoreFilter === 'high' && sc < 80) return false;
+    if (scoreFilter === 'mid' && (sc < 40 || sc >= 80)) return false;
+    if (scoreFilter === 'low' && sc >= 40) return false;
+    return true;
+  });
+
+  document.getElementById('count-chip').textContent = filteredAttempts.length + ' result' + (filteredAttempts.length!==1?'s':'');
+  renderResults();
+}
+
+// ─── Render List ──────────────────────────────────────────
+function renderResults() {
+  const el = document.getElementById('results-list');
+  if (!filteredAttempts.length) {
+    el.innerHTML = '<div class="empty-state"><div class="icon">📋</div>No results found</div>';
+    return;
+  }
+
+  el.innerHTML = filteredAttempts.map((a, i) => {
+    const sc = Math.round(a.score);
+    const badgeCls = sc>=80?'good':sc>=40?'mid':'low';
+    const name = a.profiles?.name || 'Unknown';
+    const initials = name.split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase();
+    const subName = a.subjects?.name || '—';
+    const chaps = Array.isArray(a.chapters) ? a.chapters.join(', ') : '';
+    const dateStr = Utils.formatDate ? Utils.formatDate(a.submitted_at) : new Date(a.submitted_at).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    const timeTaken = a.time_taken_seconds ? `${Math.floor(a.time_taken_seconds/60)}m ${a.time_taken_seconds%60}s` : '—';
+
+    return `
+    <div class="result-row animate-in" style="animation-delay:${Math.min(i,20)*25}ms;" onclick="openDetail('${a.id}')">
+      <div class="stud-cell">
+        <div class="avatar">${initials}</div>
+        <div>
+          <div style="font-weight:600;font-size:14px;">${Utils.escapeHtml(name)}</div>
+          <div style="font-size:11px;color:var(--text-muted);">${a.profiles?.board||''} ${a.profiles?.class||''}</div>
+        </div>
+      </div>
+      <div class="hide-sm" style="font-size:13px;">
+        <div style="font-weight:500;">${Utils.escapeHtml(subName)}</div>
+        <div style="font-size:11px;color:var(--text-muted);">${chaps ? chaps.substring(0,40)+(chaps.length>40?'…':'') : ''}</div>
+      </div>
+      <div style="font-size:12px;color:var(--text-muted);">${dateStr}</div>
+      <div><span class="score-pill ${badgeCls}">${sc}%</span></div>
+      <div style="font-size:12px;color:var(--text-muted);">${timeTaken}</div>
+    </div>`;
+  }).join('');
+}
+
+// ─── Detail Modal ─────────────────────────────────────────
+async function openDetail(attemptId) {
+  const attempt = allAttempts.find(a=>a.id===attemptId);
+  if (!attempt) return;
+
+  const modal = document.getElementById('detail-modal');
+  const sc = Math.round(attempt.score);
+  const name = attempt.profiles?.name || 'Student';
+  const subName = attempt.subjects?.name || '—';
+  const chaps = Array.isArray(attempt.chapters) ? attempt.chapters.join(', ') : '';
+  const dateStr = new Date(attempt.submitted_at).toLocaleString('en-GB', {day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  const timeTaken = attempt.time_taken_seconds ? `${Math.floor(attempt.time_taken_seconds/60)}m ${attempt.time_taken_seconds%60}s` : '—';
+
+  document.getElementById('modal-student-name').textContent = `${name} · ${subName}`;
+  document.getElementById('modal-meta').textContent = `${dateStr} · ${chaps ? 'Chapters: ' + chaps : ''} · Time: ${timeTaken}`;
+
+  const scoreBg = sc>=80?'pass-bg':sc>=40?'skip-bg':'fail-bg';
+  document.getElementById('modal-score-strip').innerHTML = `
+    <div class="tile total-bg"><div class="v">${attempt.question_ids?.length||0}</div><div class="l">Total</div></div>
+    <div class="tile ${scoreBg}"><div class="v">${sc}%</div><div class="l">Score</div></div>
+    <div class="tile pass-bg"><div class="v" id="modal-correct">—</div><div class="l">Correct</div></div>
+    <div class="tile fail-bg"><div class="v" id="modal-wrong">—</div><div class="l">Wrong</div></div>
+    <div class="tile skip-bg"><div class="v" id="modal-skip">—</div><div class="l">Skipped</div></div>
+  `;
+
+  document.getElementById('modal-review').innerHTML = '<div class="spinner"></div>';
+  modal.classList.add('show');
+
+  // Load questions
+  const questionIds = attempt.question_ids || [];
+  if (!questionIds.length) {
+    document.getElementById('modal-review').innerHTML = '<div class="text-muted text-sm">Question data not available for this attempt.</div>';
+    return;
+  }
+
+  const { data: qs } = await sb.from('questions').select('*').in('id', questionIds);
+  const answers = attempt.answers || {};
+
+  let correctCount = 0, wrongCount = 0, skipCount = 0;
+  (qs||[]).forEach(q => {
+    const ua = answers[q.id];
+    if (!ua) skipCount++;
+    else if (ua === q.correct_answer) correctCount++;
+    else wrongCount++;
+  });
+
+  document.getElementById('modal-correct').textContent = correctCount;
+  document.getElementById('modal-wrong').textContent = wrongCount;
+  document.getElementById('modal-skip').textContent = skipCount;
+
+  document.getElementById('modal-review').innerHTML = (qs||[]).map((q,i) => {
+    const userAns = answers[q.id];
+    const isCorrect = userAns === q.correct_answer;
+    const opts = {A:q.option_a,B:q.option_b,C:q.option_c,D:q.option_d};
+    const optRows = ['A','B','C','D'].map(k => {
+      let cls = '';
+      if (k === q.correct_answer) cls += ' correct-ans';
+      if (k === userAns) cls += ' your-answer ' + (isCorrect?'correct':'wrong');
+      return `<div class="rv-option${cls}">${k===q.correct_answer?'✓':k===userAns?'✗':'○'} <strong>${k}.</strong> ${Utils.escapeHtml(opts[k]||'')} ${k===q.correct_answer?'<span style="font-size:10px;font-weight:700;">← Correct</span>':''}</div>`;
+    }).join('');
+
+    return `
+    <div class="review-card animate-in" style="animation-delay:${i*20}ms;">
+      <div class="review-card-header" onclick="toggleReview(this)">
+        <div class="rv-badge ${isCorrect?'correct':'wrong'}">${isCorrect?'✓':'✗'}</div>
+        <div style="flex:1;">
+          <div style="font-size:12px;font-weight:500;line-height:1.5;">${i+1}. ${Utils.escapeHtml(q.question)}</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">
+            ${isCorrect?'<span style="color:#059669;">Correct</span>':userAns?`<span style="color:#dc2626;">Student chose ${userAns} · Correct: ${q.correct_answer}</span>`:`<span style="color:#d97706;">Not answered · Correct: ${q.correct_answer}</span>`}
+          </div>
+        </div>
+        <span class="rv-chevron" style="font-size:16px;color:var(--text-muted);transition:transform .2s;">▾</span>
+      </div>
+      <div class="review-card-body">
+        ${optRows}
+        ${q.explanation ? `
+          <button class="btn btn-outline btn-sm mt-16" onclick="toggleExplanation(this)" style="font-size:11px;">💡 Show Explanation</button>
+          <div class="explanation-box">${Utils.escapeHtml(q.explanation)}</div>
+        ` : ''}
+      </div>
+    </div>`;
+  }).join('') || '<div class="text-muted text-sm">No questions found.</div>';
+}
+
+function closeModal() {
+  document.getElementById('detail-modal').classList.remove('show');
+}
+
+document.getElementById('detail-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+function toggleReview(header) {
+  const card = header.closest('.review-card');
+  const open = card.classList.toggle('open');
+  header.querySelector('.rv-chevron').style.transform = open ? 'rotate(180deg)' : '';
+}
+
+function toggleExplanation(btn) {
+  const box = btn.nextElementSibling;
+  const showing = box.style.display === 'block';
+  box.style.display = showing ? 'none' : 'block';
+  btn.textContent = showing ? '💡 Show Explanation' : '💡 Hide Explanation';
+}
+</script>
+</body>
+</html>
