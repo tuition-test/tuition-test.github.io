@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="base-path" content="../../" />
+<title>Fee Management - Admin</title>
+<link rel="stylesheet" href="../../shared/css/styles.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<div class="page">
+  <div class="flex-between flex-wrap gap-12">
+    <h2 class="mb-0">💰 Fee Management</h2>
+    <div class="flex gap-8">
+      <input type="month" id="month-filter" style="width:auto;" />
+      <button class="btn" onclick="generateMonthlyFees()">+ Generate This Month's Fees</button>
+    </div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card warning">
+      <div class="stat-label">Total Due (Selected Month)</div>
+      <div class="stat-value" id="stat-due">₹0</div>
+    </div>
+    <div class="stat-card success">
+      <div class="stat-label">Total Collected (Selected Month)</div>
+      <div class="stat-value" id="stat-collected">₹0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total Students Billed</div>
+      <div class="stat-value" id="stat-billed">0</div>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Student</th><th>Board/Class</th><th>Amount Due</th><th>Amount Paid</th><th>Status</th><th>Paid On</th><th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="fees-tbody">
+        <tr><td colspan="7" class="text-center"><div class="spinner"></div></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- RECORD PAYMENT MODAL -->
+<div class="modal-backdrop hidden" id="pay-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Record Payment</h3>
+      <button class="modal-close" onclick="document.getElementById('pay-modal').classList.add('hidden')">✕</button>
+    </div>
+    <form id="pay-form">
+      <input type="hidden" id="pay-id" />
+      <div class="form-group">
+        <label>Student</label>
+        <input type="text" id="pay-student-name" readonly />
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Amount Due (₹)</label>
+          <input type="number" id="pay-due" step="0.01" min="0" required />
+        </div>
+        <div class="form-group">
+          <label>Amount Paid (₹)</label>
+          <input type="number" id="pay-paid" step="0.01" min="0" required />
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Paid On</label>
+        <input type="date" id="pay-date" />
+      </div>
+      <div class="form-group">
+        <label>Remarks</label>
+        <textarea id="pay-remarks" rows="2"></textarea>
+      </div>
+      <button type="submit" class="btn btn-block">Save</button>
+    </form>
+  </div>
+</div>
+
+<script src="../../shared/js/supabase-client.js"></script>
+<script src="../../shared/js/auth.js"></script>
+<script src="../../shared/js/utils.js"></script>
+<script>
+let allFees = [];
+
+(async () => {
+  const profile = await Auth.guard('admin');
+  if (!profile) return;
+
+  document.getElementById('month-filter').value = Utils.currentMonth();
+  document.getElementById('month-filter').addEventListener('change', loadFees);
+
+  await loadFees();
+})();
+
+async function loadFees() {
+  const month = document.getElementById('month-filter').value;
+
+  const { data, error } = await sb
+    .from('fee_records')
+    .select('*, profiles(name, board, class)')
+    .eq('month', month)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    Utils.toast('Error: ' + error.message, 'error');
+    return;
+  }
+
+  allFees = data || [];
+  renderFees();
+}
+
+function renderFees() {
+  const tbody = document.getElementById('fees-tbody');
+
+  if (!allFees.length) {
+    tbody.innerHTML = `<tr><td colspan="7" class="text-center">No fee records for this month. Click "Generate This Month's Fees" to create records for all tuition students.</td></tr>`;
+    document.getElementById('stat-due').textContent = '₹0';
+    document.getElementById('stat-collected').textContent = '₹0';
+    document.getElementById('stat-billed').textContent = '0';
+    return;
+  }
+
+  let totalDue = 0, totalCollected = 0;
+
+  tbody.innerHTML = allFees.map(f => {
+    const due = Math.max(0, (f.amount_due || 0) - (f.amount_paid || 0));
+    totalDue += due;
+    totalCollected += f.amount_paid || 0;
+
+    return `
+    <tr>
+      <td><strong>${Utils.escapeHtml(f.profiles?.name || '-')}</strong></td>
+      <td>${f.profiles?.board || '-'} / ${f.profiles?.class || '-'}</td>
+      <td>${Utils.formatCurrency(f.amount_due)}</td>
+      <td>${Utils.formatCurrency(f.amount_paid)}</td>
+      <td><span class="badge badge-${f.status}">${f.status}</span></td>
+      <td>${Utils.formatDate(f.paid_on)}</td>
+      <td><button class="btn btn-sm btn-outline" onclick="openPay('${f.id}')">Record Payment</button></td>
+    </tr>
+  `;
+  }).join('');
+
+  document.getElementById('stat-due').textContent = Utils.formatCurrency(totalDue);
+  document.getElementById('stat-collected').textContent = Utils.formatCurrency(totalCollected);
+  document.getElementById('stat-billed').textContent = allFees.length;
+}
+
+function openPay(id) {
+  const f = allFees.find(x => x.id === id);
+  if (!f) return;
+
+  document.getElementById('pay-id').value = f.id;
+  document.getElementById('pay-student-name').value = f.profiles?.name || '';
+  document.getElementById('pay-due').value = f.amount_due || 0;
+  document.getElementById('pay-paid').value = f.amount_paid || 0;
+  document.getElementById('pay-date').value = f.paid_on || new Date().toISOString().split('T')[0];
+  document.getElementById('pay-remarks').value = f.remarks || '';
+
+  document.getElementById('pay-modal').classList.remove('hidden');
+}
+
+document.getElementById('pay-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = document.getElementById('pay-id').value;
+  const due = parseFloat(document.getElementById('pay-due').value);
+  const paid = parseFloat(document.getElementById('pay-paid').value);
+  const paidOn = document.getElementById('pay-date').value || null;
+  const remarks = document.getElementById('pay-remarks').value.trim();
+
+  let status = 'unpaid';
+  if (paid >= due && due > 0) status = 'paid';
+  else if (paid > 0) status = 'partial';
+
+  const { error } = await sb.from('fee_records').update({
+    amount_due: due,
+    amount_paid: paid,
+    status,
+    paid_on: paid > 0 ? paidOn : null,
+    remarks
+  }).eq('id', id);
+
+  if (error) {
+    Utils.toast('Failed: ' + error.message, 'error');
+  } else {
+    Utils.toast('Payment recorded', 'success');
+    document.getElementById('pay-modal').classList.add('hidden');
+    await loadFees();
+  }
+});
+
+// Generate fee records for all active tuition students for selected month
+async function generateMonthlyFees() {
+  const month = document.getElementById('month-filter').value;
+  if (!confirm(`Generate fee records for all active tuition students for ${month}?`)) return;
+
+  const { data: students, error } = await sb
+    .from('profiles')
+    .select('id, monthly_fee')
+    .eq('role', 'tuition_student')
+    .eq('status', 'active');
+
+  if (error) {
+    Utils.toast('Error: ' + error.message, 'error');
+    return;
+  }
+
+  if (!students.length) {
+    Utils.toast('No active tuition students found', 'warning');
+    return;
+  }
+
+  let created = 0, skipped = 0;
+  for (const s of students) {
+    const { data: existing } = await sb
+      .from('fee_records')
+      .select('id')
+      .eq('student_id', s.id)
+      .eq('month', month)
+      .maybeSingle();
+
+    if (existing) { skipped++; continue; }
+
+    const { error: insertErr } = await sb.from('fee_records').insert({
+      student_id: s.id,
+      month,
+      amount_due: s.monthly_fee || 0,
+      amount_paid: 0,
+      status: 'unpaid'
+    });
+
+    if (!insertErr) created++;
+  }
+
+  Utils.toast(`Generated ${created} fee records (${skipped} already existed)`, 'success');
+  await loadFees();
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="base-path" content="../../" />
+<title>Notices - Student</title>
+<link rel="stylesheet" href="../../shared/css/styles.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<div class="page">
+  <h2>📢 Notices</h2>
+  <div class="card">
+    <div id="notices-list"><div class="spinner"></div></div>
+  </div>
+</div>
+
+<script src="../../shared/js/supabase-client.js"></script>
+<script src="../../shared/js/auth.js"></script>
+<script src="../../shared/js/utils.js"></script>
+<script>
+(async () => {
+  const profile = await Auth.guard('tuition_student');
+  if (!profile) return;
+
+  const { data: notices, error } = await sb
+    .from('notices')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  const { data: reads } = await sb.from('notice_reads').select('notice_id').eq('user_id', profile.id);
+  const readIds = new Set((reads || []).map(r => r.notice_id));
+
+  const container = document.getElementById('notices-list');
+
+  if (error) {
+    container.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div>Error loading notices</div>`;
+    return;
+  }
+
+  const relevant = (notices || []).filter(n => {
+    if (n.target_type === 'all') return true;
+    if (n.target_type === 'board') return n.target_board === profile.board;
+    if (n.target_type === 'class') return n.target_board === profile.board && n.target_class === profile.class;
+    if (n.target_type === 'user') return n.target_user_id === profile.id;
+    return false;
+  });
+
+  if (!relevant.length) {
+    container.innerHTML = `<div class="empty-state"><div class="icon">📭</div>No notices</div>`;
+    return;
+  }
+
+  container.innerHTML = relevant.map(n => `
+    <div class="notice-item ${!readIds.has(n.id) ? 'unread' : ''}" id="notice-${n.id}">
+      <div class="flex-between flex-wrap gap-8">
+        <strong>${Utils.escapeHtml(n.title)}</strong>
+        ${!readIds.has(n.id) ? '<span class="chip">New</span>' : ''}
+      </div>
+      <p class="text-sm mt-8">${Utils.escapeHtml(n.message)}</p>
+      <div class="text-sm text-muted mt-8">${Utils.formatDate(n.notice_date)}</div>
+    </div>
+  `).join('');
+
+  // Mark all as read
+  const unreadIds = relevant.filter(n => !readIds.has(n.id)).map(n => n.id);
+  for (const id of unreadIds) {
+    await sb.from('notice_reads').upsert({ notice_id: id, user_id: profile.id }, { onConflict: 'notice_id,user_id', ignoreDuplicates: true });
+  }
+})();
+</script>
+</body>
+</html>

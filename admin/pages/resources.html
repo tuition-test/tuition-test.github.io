@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="base-path" content="../../" />
+<title>Resources - Admin</title>
+<link rel="stylesheet" href="../../shared/css/styles.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<div class="page">
+  <h2>📁 Resource Upload</h2>
+
+  <div class="card">
+    <div class="card-title">Upload New Resource</div>
+    <form id="res-form">
+      <div class="form-group">
+        <label>Title *</label>
+        <input type="text" id="res-title" required />
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <textarea id="res-description" rows="2"></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Board *</label>
+          <select id="res-board" required></select>
+        </div>
+        <div class="form-group">
+          <label>Class *</label>
+          <select id="res-class" required></select>
+        </div>
+        <div class="form-group">
+          <label>Subject</label>
+          <select id="res-subject"><option value="">-- Optional --</option></select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>File (PDF, DOCX, ZIP, Image) *</label>
+        <input type="file" id="res-file" required accept=".pdf,.doc,.docx,.zip,image/*" />
+      </div>
+      <div class="form-group">
+        <label class="flex gap-8" style="font-weight:500;">
+          <input type="checkbox" id="res-visible-other" style="width:auto;" />
+          Visible to Other Students
+        </label>
+      </div>
+      <button type="submit" class="btn" id="res-submit-btn">+ Upload Resource</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-title">All Resources</div>
+    <div id="res-list"><div class="spinner"></div></div>
+  </div>
+</div>
+
+<script src="../../shared/js/supabase-client.js"></script>
+<script src="../../shared/js/auth.js"></script>
+<script src="../../shared/js/utils.js"></script>
+<script>
+let allSubjects = [];
+
+(async () => {
+  const profile = await Auth.guard('admin');
+  if (!profile) return;
+
+  const { data: subs } = await sb.from('subjects').select('*').order('name');
+  allSubjects = subs || [];
+
+  Utils.fillBoardSelect(document.getElementById('res-board'));
+  document.getElementById('res-board').addEventListener('change', e => {
+    Utils.fillClassSelect(document.getElementById('res-class'), e.target.value);
+    fillSubjectSelect();
+  });
+  document.getElementById('res-class').addEventListener('change', fillSubjectSelect);
+
+  await loadResources();
+})();
+
+function fillSubjectSelect() {
+  const board = document.getElementById('res-board').value;
+  const cls = document.getElementById('res-class').value;
+  const sel = document.getElementById('res-subject');
+  sel.innerHTML = '<option value="">-- Optional --</option>';
+  allSubjects.filter(s => s.board === board && s.class === cls).forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.textContent = s.name;
+    sel.appendChild(opt);
+  });
+}
+
+document.getElementById('res-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const title = document.getElementById('res-title').value.trim();
+  const description = document.getElementById('res-description').value.trim();
+  const board = document.getElementById('res-board').value;
+  const cls = document.getElementById('res-class').value;
+  const subjectId = document.getElementById('res-subject').value || null;
+  const visibleOther = document.getElementById('res-visible-other').checked;
+  const file = document.getElementById('res-file').files[0];
+
+  if (!file) {
+    Utils.toast('Please select a file', 'warning');
+    return;
+  }
+
+  const btn = document.getElementById('res-submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'Uploading...';
+
+  try {
+    const fileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    const { error: uploadErr } = await sb.storage.from('resources').upload(fileName, file);
+    if (uploadErr) throw uploadErr;
+
+    const { data: urlData } = sb.storage.from('resources').getPublicUrl(fileName);
+    const profile = await Auth.getProfile();
+
+    const { error } = await sb.from('resources').insert({
+      title, description,
+      file_url: urlData.publicUrl,
+      file_type: file.type || file.name.split('.').pop(),
+      board, class: cls,
+      subject_id: subjectId,
+      visible_to_other_students: visibleOther,
+      created_by: profile.id
+    });
+
+    if (error) throw error;
+
+    Utils.toast('Resource uploaded', 'success');
+    document.getElementById('res-form').reset();
+    document.getElementById('res-class').innerHTML = '<option value="">-- Select Class --</option>';
+    await loadResources();
+  } catch (err) {
+    Utils.toast('Failed: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '+ Upload Resource';
+  }
+});
+
+async function loadResources() {
+  const { data, error } = await sb
+    .from('resources')
+    .select('*, subjects(name)')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    Utils.toast('Error: ' + error.message, 'error');
+    return;
+  }
+
+  const container = document.getElementById('res-list');
+  if (!data || !data.length) {
+    container.innerHTML = `<div class="empty-state"><div class="icon">📭</div>No resources uploaded yet</div>`;
+    return;
+  }
+
+  container.innerHTML = data.map(r => `
+    <div class="list-item">
+      <div class="flex-between flex-wrap gap-8">
+        <div>
+          <strong>${Utils.escapeHtml(r.title)}</strong>
+          ${r.visible_to_other_students ? '<span class="chip">Other Students ✓</span>' : ''}
+          <div class="text-sm text-muted">${r.board} - ${r.class} ${r.subjects ? '• ' + r.subjects.name : ''}</div>
+          ${r.description ? `<p class="text-sm mt-8">${Utils.escapeHtml(r.description)}</p>` : ''}
+          <div class="text-sm mt-8"><a href="${r.file_url}" target="_blank">📎 Download File</a></div>
+          <div class="text-sm text-muted mt-8">${Utils.formatDateTime(r.created_at)}</div>
+        </div>
+        <button class="btn btn-sm btn-danger" onclick="deleteResource('${r.id}')">Delete</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function deleteResource(id) {
+  if (!confirm('Delete this resource?')) return;
+  const { error } = await sb.from('resources').delete().eq('id', id);
+  if (error) {
+    Utils.toast('Delete failed: ' + error.message, 'error');
+  } else {
+    Utils.toast('Resource deleted', 'success');
+    await loadResources();
+  }
+}
+</script>
+</body>
+</html>

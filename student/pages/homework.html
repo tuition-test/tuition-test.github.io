@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="base-path" content="../../" />
+<title>Homework - Student</title>
+<link rel="stylesheet" href="../../shared/css/styles.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<div class="page">
+  <h2>📝 Homework</h2>
+  <div class="card">
+    <div id="hw-list"><div class="spinner"></div></div>
+  </div>
+</div>
+
+<script src="../../shared/js/supabase-client.js"></script>
+<script src="../../shared/js/auth.js"></script>
+<script src="../../shared/js/utils.js"></script>
+<script>
+(async () => {
+  const profile = await Auth.guard('tuition_student');
+  if (!profile) return;
+
+  const now = new Date().toISOString();
+
+  const { data, error } = await sb
+    .from('homework')
+    .select('*, subjects(name)')
+    .eq('board', profile.board)
+    .eq('class', profile.class)
+    .order('created_at', { ascending: false });
+
+  const container = document.getElementById('hw-list');
+
+  if (error) {
+    container.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div>Error loading homework</div>`;
+    return;
+  }
+
+  const active = (data || []).filter(h => !h.deadline || h.deadline >= now);
+
+  if (!active.length) {
+    container.innerHTML = `<div class="empty-state"><div class="icon">✅</div>No homework assigned currently</div>`;
+    return;
+  }
+
+  container.innerHTML = active.map(h => `
+    <div class="list-item">
+      <div class="flex-between flex-wrap gap-8">
+        <strong>${Utils.escapeHtml(h.title)}</strong>
+        ${h.subjects ? `<span class="chip">${Utils.escapeHtml(h.subjects.name)}</span>` : ''}
+      </div>
+      ${h.description ? `<p class="text-sm mt-8">${Utils.escapeHtml(h.description)}</p>` : ''}
+      ${h.image_url ? `<img src="${h.image_url}" style="max-width:280px;border-radius:8px;margin-top:8px;" />` : ''}
+      <div class="text-sm text-muted mt-8">Deadline: ${h.deadline ? Utils.formatDateTime(h.deadline) : 'No deadline'}</div>
+    </div>
+  `).join('');
+})();
+</script>
+</body>
+</html>

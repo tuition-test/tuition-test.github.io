@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="base-path" content="../../" />
+<title>Home - Student</title>
+<link rel="stylesheet" href="../../shared/css/styles.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<div class="page">
+  <h2 id="greeting">👋 Welcome</h2>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">Board / Class</div>
+      <div class="stat-value" id="stat-class" style="font-size:16px;">-</div>
+    </div>
+    <div class="stat-card warning">
+      <div class="stat-label">Fee Status (This Month)</div>
+      <div class="stat-value" id="stat-fee" style="font-size:16px;">-</div>
+    </div>
+    <div class="stat-card success">
+      <div class="stat-label">Pending Homework</div>
+      <div class="stat-value" id="stat-hw">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Unread Notices</div>
+      <div class="stat-value" id="stat-notices">0</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📚 My Subjects</div>
+    <div id="subjects-list"><div class="spinner"></div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📝 Upcoming Homework</div>
+    <div id="hw-list"><div class="spinner"></div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📢 Recent Notices</div>
+    <div id="notices-list"><div class="spinner"></div></div>
+  </div>
+</div>
+
+<script src="../../shared/js/supabase-client.js"></script>
+<script src="../../shared/js/auth.js"></script>
+<script src="../../shared/js/utils.js"></script>
+<script>
+(async () => {
+  const profile = await Auth.guard('tuition_student');
+  if (!profile) return;
+
+  document.getElementById('greeting').textContent = `👋 Welcome, ${profile.name}`;
+  document.getElementById('stat-class').textContent = `${profile.board || '-'} / ${profile.class || '-'}`;
+
+  // Fee status this month
+  const month = Utils.currentMonth();
+  const { data: fee } = await sb.from('fee_records').select('*').eq('student_id', profile.id).eq('month', month).maybeSingle();
+  if (fee) {
+    document.getElementById('stat-fee').textContent = fee.status === 'paid' ? '✅ Paid' : fee.status === 'partial' ? '⚠️ Partial' : '❌ Unpaid';
+  } else {
+    document.getElementById('stat-fee').textContent = 'No record';
+  }
+
+  // Subjects
+  const { data: subjects } = await sb
+    .from('student_subjects')
+    .select('subjects(name, board, class)')
+    .eq('student_id', profile.id);
+
+  const subContainer = document.getElementById('subjects-list');
+  if (subjects && subjects.length) {
+    subContainer.innerHTML = `<div class="flex flex-wrap gap-8">${subjects.map(s => `<span class="chip">${Utils.escapeHtml(s.subjects?.name || '-')}</span>`).join('')}</div>`;
+  } else {
+    subContainer.innerHTML = `<div class="empty-state"><div class="icon">📚</div>No subjects assigned yet</div>`;
+  }
+
+  // Homework (board+class match, not expired)
+  const now = new Date().toISOString();
+  const { data: hw } = await sb
+    .from('homework')
+    .select('*, subjects(name)')
+    .eq('board', profile.board)
+    .eq('class', profile.class)
+    .order('deadline', { ascending: true });
+
+  const upcoming = (hw || []).filter(h => !h.deadline || h.deadline >= now);
+  document.getElementById('stat-hw').textContent = upcoming.length;
+
+  const hwContainer = document.getElementById('hw-list');
+  if (upcoming.length) {
+    hwContainer.innerHTML = upcoming.slice(0, 5).map(h => `
+      <div class="list-item">
+        <strong>${Utils.escapeHtml(h.title)}</strong> ${h.subjects ? `<span class="chip">${Utils.escapeHtml(h.subjects.name)}</span>` : ''}
+        <div class="text-sm text-muted mt-8">Deadline: ${h.deadline ? Utils.formatDateTime(h.deadline) : 'No deadline'}</div>
+      </div>
+    `).join('');
+  } else {
+    hwContainer.innerHTML = `<div class="empty-state"><div class="icon">✅</div>No pending homework</div>`;
+  }
+
+  // Notices
+  const { data: notices } = await sb
+    .from('notices')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(20);
+
+  const { data: reads } = await sb.from('notice_reads').select('notice_id').eq('user_id', profile.id);
+  const readIds = new Set((reads || []).map(r => r.notice_id));
+
+  const relevant = (notices || []).filter(n => {
+    if (n.target_type === 'all') return true;
+    if (n.target_type === 'board') return n.target_board === profile.board;
+    if (n.target_type === 'class') return n.target_board === profile.board && n.target_class === profile.class;
+    if (n.target_type === 'user') return n.target_user_id === profile.id;
+    return false;
+  });
+
+  const unread = relevant.filter(n => !readIds.has(n.id));
+  document.getElementById('stat-notices').textContent = unread.length;
+
+  const noticeContainer = document.getElementById('notices-list');
+  if (relevant.length) {
+    noticeContainer.innerHTML = relevant.slice(0, 5).map(n => `
+      <div class="notice-item ${!readIds.has(n.id) ? 'unread' : ''}">
+        <strong>${Utils.escapeHtml(n.title)}</strong> ${!readIds.has(n.id) ? '<span class="chip">New</span>' : ''}
+        <p class="text-sm mt-8">${Utils.escapeHtml(n.message)}</p>
+        <div class="text-sm text-muted mt-8">${Utils.formatDate(n.notice_date)}</div>
+      </div>
+    `).join('');
+  } else {
+    noticeContainer.innerHTML = `<div class="empty-state"><div class="icon">📭</div>No notices</div>`;
+  }
+})();
+</script>
+</body>
+</html>

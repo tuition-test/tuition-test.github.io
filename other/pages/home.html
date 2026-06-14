@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="base-path" content="../../" />
+<title>Home</title>
+<link rel="stylesheet" href="../../shared/css/styles.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<div class="page">
+  <h2 id="greeting">👋 Welcome</h2>
+  <p class="text-muted">You're registered as an Other Student. You have access to limited resources, tests, notices, and tuition info. Contact admin to enroll as a Tuition Student for full access.</p>
+
+  <div class="card">
+    <div class="card-title">📢 Recent Notices</div>
+    <div id="notices-list"><div class="spinner"></div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📁 Featured Resources</div>
+    <div id="res-list"><div class="spinner"></div></div>
+  </div>
+</div>
+
+<script src="../../shared/js/supabase-client.js"></script>
+<script src="../../shared/js/auth.js"></script>
+<script src="../../shared/js/utils.js"></script>
+<script>
+(async () => {
+  const profile = await Auth.guard('other_student');
+  if (!profile) return;
+
+  document.getElementById('greeting').textContent = `👋 Welcome, ${profile.name}`;
+
+  // Notices for all
+  const { data: notices } = await sb
+    .from('notices')
+    .select('*')
+    .eq('target_type', 'all')
+    .order('created_at', { ascending: false })
+    .limit(5);
+
+  const noticeContainer = document.getElementById('notices-list');
+  if (notices && notices.length) {
+    noticeContainer.innerHTML = notices.map(n => `
+      <div class="list-item">
+        <strong>${Utils.escapeHtml(n.title)}</strong>
+        <p class="text-sm mt-8">${Utils.escapeHtml(n.message)}</p>
+        <div class="text-sm text-muted mt-8">${Utils.formatDate(n.notice_date)}</div>
+      </div>
+    `).join('');
+  } else {
+    noticeContainer.innerHTML = `<div class="empty-state"><div class="icon">📭</div>No notices</div>`;
+  }
+
+  // Resources visible to other students
+  const { data: resources } = await sb
+    .from('resources')
+    .select('*, subjects(name)')
+    .eq('visible_to_other_students', true)
+    .order('created_at', { ascending: false })
+    .limit(5);
+
+  const resContainer = document.getElementById('res-list');
+  if (resources && resources.length) {
+    resContainer.innerHTML = resources.map(r => `
+      <div class="list-item">
+        <strong>${Utils.escapeHtml(r.title)}</strong>
+        ${r.subjects ? `<span class="chip">${Utils.escapeHtml(r.subjects.name)}</span>` : ''}
+        <div class="text-sm mt-8"><a href="${r.file_url}" target="_blank">📎 View / Download</a></div>
+      </div>
+    `).join('');
+  } else {
+    resContainer.innerHTML = `<div class="empty-state"><div class="icon">📭</div>No resources available</div>`;
+  }
+})();
+</script>
+</body>
+</html>

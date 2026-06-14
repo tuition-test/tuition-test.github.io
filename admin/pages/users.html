@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="base-path" content="../../" />
+<title>Users - Admin</title>
+<link rel="stylesheet" href="../../shared/css/styles.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<div class="page">
+  <div class="flex-between flex-wrap gap-12 mb-0">
+    <h2 class="mb-0">👥 User Management</h2>
+    <div class="flex gap-8">
+      <select id="filter-role" style="width:auto;">
+        <option value="">All Roles</option>
+        <option value="admin">Admin</option>
+        <option value="tuition_student">Tuition Student</option>
+        <option value="other_student">Other Student</option>
+      </select>
+      <select id="filter-status" style="width:auto;">
+        <option value="">All Status</option>
+        <option value="active">Active</option>
+        <option value="inactive">Inactive</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="table-wrap mt-16">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Role</th>
+          <th>Board</th>
+          <th>Class</th>
+          <th>Mobile</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="users-tbody">
+        <tr><td colspan="7" class="text-center"><div class="spinner"></div></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- VIEW MODAL -->
+<div class="modal-backdrop hidden" id="view-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>User Details</h3>
+      <button class="modal-close" onclick="closeModal('view-modal')">✕</button>
+    </div>
+    <div id="view-content"></div>
+  </div>
+</div>
+
+<!-- EDIT MODAL -->
+<div class="modal-backdrop hidden" id="edit-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Edit User</h3>
+      <button class="modal-close" onclick="closeModal('edit-modal')">✕</button>
+    </div>
+    <form id="edit-form">
+      <input type="hidden" id="edit-id" />
+      <div class="form-group">
+        <label>Name</label>
+        <input type="text" id="edit-name" required />
+      </div>
+      <div class="form-group">
+        <label>Mobile</label>
+        <input type="text" id="edit-mobile" />
+      </div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="edit-email" />
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Board</label>
+          <select id="edit-board"></select>
+        </div>
+        <div class="form-group">
+          <label>Class</label>
+          <select id="edit-class"></select>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-block">Save Changes</button>
+    </form>
+  </div>
+</div>
+
+<!-- UPGRADE TO TUITION STUDENT MODAL -->
+<div class="modal-backdrop hidden" id="upgrade-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Upgrade to Tuition Student</h3>
+      <button class="modal-close" onclick="closeModal('upgrade-modal')">✕</button>
+    </div>
+    <form id="upgrade-form">
+      <input type="hidden" id="upgrade-id" />
+      <div class="form-row">
+        <div class="form-group">
+          <label>Board *</label>
+          <select id="upgrade-board" required></select>
+        </div>
+        <div class="form-group">
+          <label>Class *</label>
+          <select id="upgrade-class" required></select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Subjects *</label>
+        <div class="subject-checkboxes" id="upgrade-subjects">
+          <span class="text-muted text-sm">Select board & class first</span>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Monthly Fee (₹) *</label>
+          <input type="number" id="upgrade-fee" required min="0" step="0.01" />
+        </div>
+        <div class="form-group">
+          <label>Admission Date *</label>
+          <input type="date" id="upgrade-admission-date" required />
+        </div>
+      </div>
+      <button type="submit" class="btn btn-block btn-success">Upgrade Student</button>
+    </form>
+  </div>
+</div>
+
+<!-- CREATE TUITION STUDENT MODAL (new user) -->
+<div class="modal-backdrop hidden" id="create-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Create Tuition Student</h3>
+      <button class="modal-close" onclick="closeModal('create-modal')">✕</button>
+    </div>
+    <form id="create-form">
+      <div class="form-group">
+        <label>Name *</label>
+        <input type="text" id="create-name" required />
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Board *</label>
+          <select id="create-board" required></select>
+        </div>
+        <div class="form-group">
+          <label>Class *</label>
+          <select id="create-class" required></select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Subjects *</label>
+        <div class="subject-checkboxes" id="create-subjects">
+          <span class="text-muted text-sm">Select board & class first</span>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Monthly Fee (₹) *</label>
+          <input type="number" id="create-fee" required min="0" step="0.01" />
+        </div>
+        <div class="form-group">
+          <label>Admission Date *</label>
+          <input type="date" id="create-admission-date" required />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Temporary Username *</label>
+          <input type="text" id="create-username" required pattern="[a-zA-Z0-9_]{4,20}" />
+        </div>
+        <div class="form-group">
+          <label>Temporary Password *</label>
+          <div class="flex gap-8">
+            <input type="text" id="create-password" required minlength="6" />
+            <button type="button" class="btn btn-sm btn-outline" onclick="genPassword('create-password')">🎲</button>
+          </div>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-block btn-success">Create Student</button>
+    </form>
+  </div>
+</div>
+
+<!-- RESET PASSWORD MODAL -->
+<div class="modal-backdrop hidden" id="reset-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Reset Password</h3>
+      <button class="modal-close" onclick="closeModal('reset-modal')">✕</button>
+    </div>
+    <p class="text-sm text-muted">
+      To reset a password, generate a new temporary password below. Note: actual
+      auth password update requires the Supabase Dashboard
+      (Authentication → Users → "..." → Reset Password) since this is a
+      backend-free frontend. Communicate this temporary password to the
+      student offline, and use the Dashboard to set it as their new password.
+    </p>
+    <input type="hidden" id="reset-id" />
+    <div class="form-group mt-16">
+      <label>Suggested Temporary Password</label>
+      <div class="flex gap-8">
+        <input type="text" id="reset-password" readonly />
+        <button type="button" class="btn btn-sm btn-outline" onclick="genPassword('reset-password')">🎲 Generate</button>
+      </div>
+    </div>
+    <button type="button" class="btn btn-block" onclick="copyResetPassword()">📋 Copy Password</button>
+    <button type="button" class="btn btn-block btn-outline mt-8" onclick="flagPasswordChange()">Flag "Must Change Password" on next login</button>
+  </div>
+</div>
+
+<script src="../../shared/js/supabase-client.js"></script>
+<script src="../../shared/js/auth.js"></script>
+<script src="../../shared/js/utils.js"></script>
+<script>
+let allUsers = [];
+let allSubjects = [];
+
+(async () => {
+  const profile = await Auth.guard('admin');
+  if (!profile) return;
+
+  await loadSubjects();
+  await loadUsers();
+
+  document.getElementById('filter-role').addEventListener('change', renderUsers);
+  document.getElementById('filter-status').addEventListener('change', renderUsers);
+
+  // Init board selects
+  Utils.fillBoardSelect(document.getElementById('edit-board'));
+  Utils.fillBoardSelect(document.getElementById('upgrade-board'));
+  Utils.fillBoardSelect(document.getElementById('create-board'));
+
+  document.getElementById('edit-board').addEventListener('change', (e) => {
+    Utils.fillClassSelect(document.getElementById('edit-class'), e.target.value);
+  });
+  document.getElementById('upgrade-board').addEventListener('change', (e) => {
+    Utils.fillClassSelect(document.getElementById('upgrade-class'), e.target.value);
+    renderSubjectCheckboxes('upgrade');
+  });
+  document.getElementById('upgrade-class').addEventListener('change', () => renderSubjectCheckboxes('upgrade'));
+
+  document.getElementById('create-board').addEventListener('change', (e) => {
+    Utils.fillClassSelect(document.getElementById('create-class'), e.target.value);
+    renderSubjectCheckboxes('create');
+  });
+  document.getElementById('create-class').addEventListener('change', () => renderSubjectCheckboxes('create'));
+})();
+
+async function loadSubjects() {
+  const { data, error } = await sb.from('subjects').select('*').order('name');
+  if (!error) allSubjects = data || [];
+}
+
+function renderSubjectCheckboxes(prefix) {
+  const board = document.getElementById(`${prefix}-board`).value;
+  const cls = document.getElementById(`${prefix}-class`).value;
+  const container = document.getElementById(`${prefix}-subjects`);
+
+  if (!board || !cls) {
+    container.innerHTML = `<span class="text-muted text-sm">Select board & class first</span>`;
+    return;
+  }
+
+  const filtered = allSubjects.filter(s => s.board === board && s.class === cls);
+  if (!filtered.length) {
+    container.innerHTML = `<span class="text-muted text-sm">No subjects found for this board/class. Add subjects first.</span>`;
+    return;
+  }
+
+  container.innerHTML = filtered.map(s => `
+    <label>
+      <input type="checkbox" value="${s.id}" />
+      ${Utils.escapeHtml(s.name)}
+    </label>
+  `).join('');
+}
+
+async function loadUsers() {
+  const { data, error } = await sb.from('profiles').select('*').order('created_at', { ascending: false });
+  if (error) {
+    Utils.toast('Error loading users: ' + error.message, 'error');
+    return;
+  }
+  allUsers = data || [];
+  renderUsers();
+}
+
+function renderUsers() {
+  const roleFilter = document.getElementById('filter-role').value;
+  const statusFilter = document.getElementById('filter-status').value;
+
+  let filtered = allUsers;
+  if (roleFilter) filtered = filtered.filter(u => u.role === roleFilter);
+  if (statusFilter) filtered = filtered.filter(u => u.status === statusFilter);
+
+  const tbody = document.getElementById('users-tbody');
+
+  if (!filtered.length) {
+    tbody.innerHTML = `<tr><td colspan="7" class="text-center">No users found</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(u => `
+    <tr>
+      <td>
+        <strong>${Utils.escapeHtml(u.name)}</strong>
+        <div class="text-sm text-muted">@${Utils.escapeHtml(u.username)}</div>
+      </td>
+      <td><span class="badge badge-${u.role}">${u.role.replace('_',' ')}</span></td>
+      <td>${u.board || '-'}</td>
+      <td>${u.class || '-'}</td>
+      <td>${u.mobile || '-'}</td>
+      <td><span class="badge badge-${u.status}">${u.status}</span></td>
+      <td>
+        <div class="flex gap-8 flex-wrap">
+          <button class="btn btn-sm btn-outline" onclick="viewUser('${u.id}')">View</button>
+          <button class="btn btn-sm btn-outline" onclick="editUser('${u.id}')">Edit</button>
+          ${u.role === 'other_student' ? `<button class="btn btn-sm btn-success" onclick="openUpgrade('${u.id}')">Upgrade</button>` : ''}
+          ${u.role !== 'admin' ? (u.status === 'active'
+            ? `<button class="btn btn-sm btn-muted" onclick="toggleStatus('${u.id}','inactive')">Deactivate</button>`
+            : `<button class="btn btn-sm btn-success" onclick="toggleStatus('${u.id}','active')">Activate</button>`) : ''}
+          <button class="btn btn-sm btn-outline" onclick="openReset('${u.id}')">Reset Pwd</button>
+          ${u.role !== 'admin' ? `<button class="btn btn-sm btn-danger" onclick="deleteUser('${u.id}')">Delete</button>` : ''}
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+function viewUser(id) {
+  const u = allUsers.find(x => x.id === id);
+  if (!u) return;
+
+  document.getElementById('view-content').innerHTML = `
+    <div class="text-center mb-0">
+      ${u.profile_picture
+        ? `<img src="${u.profile_picture}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;margin:0 auto 12px;" />`
+        : `<div class="avatar" style="width:80px;height:80px;font-size:32px;margin:0 auto 12px;background:var(--primary-light);color:var(--primary);">${(u.name||'?').charAt(0).toUpperCase()}</div>`}
+      <h3 class="mb-0">${Utils.escapeHtml(u.name)}</h3>
+      <span class="badge badge-${u.role}">${u.role.replace('_',' ')}</span>
+    </div>
+    <div class="mt-16">
+      <p><strong>Username:</strong> @${Utils.escapeHtml(u.username)}</p>
+      <p><strong>Mobile:</strong> ${u.mobile || '-'}</p>
+      <p><strong>Email:</strong> ${u.email || '-'}</p>
+      <p><strong>Board:</strong> ${u.board || '-'}</p>
+      <p><strong>Class:</strong> ${u.class || '-'}</p>
+      <p><strong>Monthly Fee:</strong> ${u.monthly_fee ? Utils.formatCurrency(u.monthly_fee) : '-'}</p>
+      <p><strong>Admission Date:</strong> ${Utils.formatDate(u.admission_date)}</p>
+      <p><strong>Status:</strong> <span class="badge badge-${u.status}">${u.status}</span></p>
+      <p><strong>Joined:</strong> ${Utils.formatDateTime(u.created_at)}</p>
+    </div>
+  `;
+  openModal('view-modal');
+}
+
+function editUser(id) {
+  const u = allUsers.find(x => x.id === id);
+  if (!u) return;
+
+  document.getElementById('edit-id').value = u.id;
+  document.getElementById('edit-name').value = u.name || '';
+  document.getElementById('edit-mobile').value = u.mobile || '';
+  document.getElementById('edit-email').value = u.email || '';
+
+  const boardSelect = document.getElementById('edit-board');
+  boardSelect.value = u.board || '';
+  Utils.fillClassSelect(document.getElementById('edit-class'), u.board || '');
+  document.getElementById('edit-class').value = u.class || '';
+
+  openModal('edit-modal');
+}
+
+document.getElementById('edit-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = document.getElementById('edit-id').value;
+  const updates = {
+    name: document.getElementById('edit-name').value.trim(),
+    mobile: document.getElementById('edit-mobile').value.trim(),
+    email: document.getElementById('edit-email').value.trim() || null,
+    board: document.getElementById('edit-board').value || null,
+    class: document.getElementById('edit-class').value || null,
+  };
+
+  const { error } = await sb.from('profiles').update(updates).eq('id', id);
+  if (error) {
+    Utils.toast('Update failed: ' + error.message, 'error');
+  } else {
+    Utils.toast('User updated successfully', 'success');
+    closeModal('edit-modal');
+    await loadUsers();
+  }
+});
+
+async function toggleStatus(id, status) {
+  if (!confirm(`Set status to "${status}"?`)) return;
+  const { error } = await sb.from('profiles').update({ status }).eq('id', id);
+  if (error) {
+    Utils.toast('Failed: ' + error.message, 'error');
+  } else {
+    Utils.toast(`User ${status === 'active' ? 'activated' : 'deactivated'}`, 'success');
+    await loadUsers();
+  }
+}
+
+async function deleteUser(id) {
+  const u = allUsers.find(x => x.id === id);
+  if (!confirm(`Permanently delete "${u?.name}"? This cannot be undone.`)) return;
+
+  const { error } = await sb.from('profiles').delete().eq('id', id);
+  if (error) {
+    Utils.toast('Delete failed: ' + error.message, 'error');
+  } else {
+    Utils.toast('User deleted', 'success');
+    await loadUsers();
+  }
+}
+
+// ---------- UPGRADE ----------
+function openUpgrade(id) {
+  const u = allUsers.find(x => x.id === id);
+  document.getElementById('upgrade-id').value = id;
+  document.getElementById('upgrade-board').value = '';
+  document.getElementById('upgrade-class').innerHTML = '<option value="">-- Select Class --</option>';
+  document.getElementById('upgrade-subjects').innerHTML = '<span class="text-muted text-sm">Select board & class first</span>';
+  document.getElementById('upgrade-fee').value = '';
+  document.getElementById('upgrade-admission-date').value = new Date().toISOString().split('T')[0];
+  openModal('upgrade-modal');
+}
+
+document.getElementById('upgrade-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = document.getElementById('upgrade-id').value;
+  const board = document.getElementById('upgrade-board').value;
+  const cls = document.getElementById('upgrade-class').value;
+  const fee = parseFloat(document.getElementById('upgrade-fee').value);
+  const admissionDate = document.getElementById('upgrade-admission-date').value;
+
+  const checkedSubjects = Array.from(document.querySelectorAll('#upgrade-subjects input:checked')).map(c => c.value);
+  if (!checkedSubjects.length) {
+    Utils.toast('Please select at least one subject', 'warning');
+    return;
+  }
+
+  // Update profile
+  const { error: updateErr } = await sb.from('profiles').update({
+    role: 'tuition_student',
+    board, class: cls,
+    monthly_fee: fee,
+    admission_date: admissionDate
+  }).eq('id', id);
+
+  if (updateErr) {
+    Utils.toast('Upgrade failed: ' + updateErr.message, 'error');
+    return;
+  }
+
+  // Insert subjects
+  const rows = checkedSubjects.map(sid => ({ student_id: id, subject_id: sid }));
+  await sb.from('student_subjects').delete().eq('student_id', id); // clear old
+  const { error: subErr } = await sb.from('student_subjects').insert(rows);
+
+  if (subErr) {
+    Utils.toast('Subjects assignment failed: ' + subErr.message, 'error');
+  } else {
+    Utils.toast('Student upgraded to Tuition Student!', 'success');
+    closeModal('upgrade-modal');
+    await loadUsers();
+  }
+});
+
+// ---------- CREATE TUITION STUDENT ----------
+// Note: trigger from a button outside this file's normal flow - add via header
+document.addEventListener('DOMContentLoaded', () => {
+  const heading = document.querySelector('.page h2');
+  const btn = document.createElement('button');
+  btn.className = 'btn btn-success';
+  btn.textContent = '+ New Tuition Student';
+  btn.style.marginLeft = '8px';
+  btn.onclick = () => {
+    document.getElementById('create-form').reset();
+    document.getElementById('create-subjects').innerHTML = '<span class="text-muted text-sm">Select board & class first</span>';
+    document.getElementById('create-admission-date').value = new Date().toISOString().split('T')[0];
+    openModal('create-modal');
+  };
+  heading.insertAdjacentElement('afterend', btn);
+});
+
+document.getElementById('create-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const name = document.getElementById('create-name').value.trim();
+  const board = document.getElementById('create-board').value;
+  const cls = document.getElementById('create-class').value;
+  const fee = parseFloat(document.getElementById('create-fee').value);
+  const admissionDate = document.getElementById('create-admission-date').value;
+  const username = document.getElementById('create-username').value.trim().toLowerCase();
+  const password = document.getElementById('create-password').value;
+
+  const checkedSubjects = Array.from(document.querySelectorAll('#create-subjects input:checked')).map(c => c.value);
+  if (!checkedSubjects.length) {
+    Utils.toast('Please select at least one subject', 'warning');
+    return;
+  }
+
+  // Check username uniqueness
+  const { data: existing } = await sb.from('profiles').select('id').eq('username', username).maybeSingle();
+  if (existing) {
+    Utils.toast('Username already exists', 'error');
+    return;
+  }
+
+  // Create auth user
+  const fakeEmail = usernameToEmail(username);
+  const { data: signUpData, error: signUpErr } = await sb.auth.signUp({
+    email: fakeEmail,
+    password
+  });
+
+  if (signUpErr) {
+    Utils.toast('Account creation failed: ' + signUpErr.message, 'error');
+    return;
+  }
+
+  // NOTE: signUp logs in as the new user in this client session.
+  // We must re-fetch admin session afterward, OR perform insert immediately
+  // while we still have a valid (new user's) session — RLS allows
+  // insert where auth_id = auth.uid(), so the new user can insert their
+  // own profile row right after signUp.
+  const { error: insertErr } = await sb.from('profiles').insert({
+    auth_id: signUpData.user.id,
+    name, board, class: cls,
+    username,
+    role: 'tuition_student',
+    status: 'active',
+    monthly_fee: fee,
+    admission_date: admissionDate,
+    must_change_password: true
+  });
+
+  if (insertErr) {
+    Utils.toast('Profile creation failed: ' + insertErr.message, 'error');
+    // sign back in as admin below regardless
+  }
+
+  // Insert subjects (need profile id)
+  const { data: newProfile } = await sb.from('profiles').select('id').eq('username', username).maybeSingle();
+  if (newProfile) {
+    const rows = checkedSubjects.map(sid => ({ student_id: newProfile.id, subject_id: sid }));
+    await sb.from('student_subjects').insert(rows);
+  }
+
+  // IMPORTANT: signUp switched our session to the new student.
+  // Sign back in as admin.
+  await sb.auth.signOut();
+  Utils.toast('Tuition student created! Re-login as admin to continue.', 'success');
+
+  setTimeout(() => {
+    alert(`Student created successfully!\n\nUsername: ${username}\nPassword: ${password}\n\nYou have been logged out because account creation requires a session switch. Please log back in as admin.`);
+    window.location.href = '../../index.html';
+  }, 500);
+});
+
+// ---------- RESET PASSWORD ----------
+function openReset(id) {
+  document.getElementById('reset-id').value = id;
+  document.getElementById('reset-password').value = Utils.generateTempPassword();
+  openModal('reset-modal');
+}
+
+function genPassword(targetId) {
+  document.getElementById(targetId).value = Utils.generateTempPassword();
+}
+
+function copyResetPassword() {
+  const val = document.getElementById('reset-password').value;
+  navigator.clipboard.writeText(val);
+  Utils.toast('Password copied to clipboard', 'success');
+}
+
+async function flagPasswordChange() {
+  const id = document.getElementById('reset-id').value;
+  try {
+    await Auth.flagMustChangePassword(id);
+    Utils.toast('Flagged. Remember to update the actual password in Supabase Dashboard → Authentication → Users.', 'success');
+    closeModal('reset-modal');
+  } catch (err) {
+    Utils.toast('Failed: ' + err.message, 'error');
+  }
+}
+</script>
+</body>
+</html>

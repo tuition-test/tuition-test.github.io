@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="base-path" content="../../" />
+<title>Settings - Admin</title>
+<link rel="stylesheet" href="../../shared/css/styles.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<div class="page">
+  <h2>⚙️ Settings</h2>
+
+  <div class="card">
+    <div class="card-title">Tuition Information</div>
+    <form id="settings-form">
+      <div class="form-group">
+        <label>Tuition Address</label>
+        <textarea id="set-address" rows="2"></textarea>
+      </div>
+      <div class="form-group">
+        <label>Contact Number</label>
+        <input type="text" id="set-contact" />
+      </div>
+      <div class="form-group">
+        <label>Google Map Link</label>
+        <input type="url" id="set-map" placeholder="https://maps.google.com/..." />
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Facebook Link</label>
+          <input type="url" id="set-fb" />
+        </div>
+        <div class="form-group">
+          <label>Instagram Link</label>
+          <input type="url" id="set-ig" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>YouTube Link</label>
+          <input type="url" id="set-yt" />
+        </div>
+        <div class="form-group">
+          <label>WhatsApp Link</label>
+          <input type="url" id="set-wa" placeholder="https://wa.me/91XXXXXXXXXX" />
+        </div>
+      </div>
+      <button type="submit" class="btn btn-block">Save Settings</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Admin Profile</div>
+    <p class="text-sm text-muted">Update your own login password.</p>
+    <form id="pwd-form">
+      <div class="form-group">
+        <label>New Password</label>
+        <input type="password" id="new-password" minlength="6" required />
+      </div>
+      <button type="submit" class="btn btn-outline">Change Password</button>
+    </form>
+  </div>
+</div>
+
+<script src="../../shared/js/supabase-client.js"></script>
+<script src="../../shared/js/auth.js"></script>
+<script src="../../shared/js/utils.js"></script>
+<script>
+(async () => {
+  const profile = await Auth.guard('admin');
+  if (!profile) return;
+  await loadSettings();
+})();
+
+async function loadSettings() {
+  const { data, error } = await sb.from('settings').select('*').eq('id', 1).maybeSingle();
+  if (error) {
+    Utils.toast('Error: ' + error.message, 'error');
+    return;
+  }
+  if (data) {
+    document.getElementById('set-address').value = data.tuition_address || '';
+    document.getElementById('set-contact').value = data.contact_number || '';
+    document.getElementById('set-map').value = data.google_map_link || '';
+    document.getElementById('set-fb').value = data.facebook_link || '';
+    document.getElementById('set-ig').value = data.instagram_link || '';
+    document.getElementById('set-yt').value = data.youtube_link || '';
+    document.getElementById('set-wa').value = data.whatsapp_link || '';
+  }
+}
+
+document.getElementById('settings-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const updates = {
+    tuition_address: document.getElementById('set-address').value.trim(),
+    contact_number: document.getElementById('set-contact').value.trim(),
+    google_map_link: document.getElementById('set-map').value.trim(),
+    facebook_link: document.getElementById('set-fb').value.trim(),
+    instagram_link: document.getElementById('set-ig').value.trim(),
+    youtube_link: document.getElementById('set-yt').value.trim(),
+    whatsapp_link: document.getElementById('set-wa').value.trim(),
+    updated_at: new Date().toISOString()
+  };
+
+  const { error } = await sb.from('settings').update(updates).eq('id', 1);
+  if (error) {
+    Utils.toast('Failed: ' + error.message, 'error');
+  } else {
+    Utils.toast('Settings saved', 'success');
+  }
+});
+
+document.getElementById('pwd-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const newPassword = document.getElementById('new-password').value;
+
+  try {
+    await Auth.changePassword(newPassword);
+    Utils.toast('Password updated', 'success');
+    document.getElementById('pwd-form').reset();
+  } catch (err) {
+    Utils.toast('Failed: ' + err.message, 'error');
+  }
+});
+</script>
+</body>
+</html>

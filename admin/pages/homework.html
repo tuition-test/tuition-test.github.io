@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="base-path" content="../../" />
+<title>Homework - Admin</title>
+<link rel="stylesheet" href="../../shared/css/styles.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<div class="page">
+  <h2>📝 Homework Management</h2>
+
+  <div class="card">
+    <div class="card-title">Assign New Homework</div>
+    <form id="hw-form">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Board *</label>
+          <select id="hw-board" required></select>
+        </div>
+        <div class="form-group">
+          <label>Class *</label>
+          <select id="hw-class" required></select>
+        </div>
+        <div class="form-group">
+          <label>Subject</label>
+          <select id="hw-subject"><option value="">-- Optional --</option></select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Title *</label>
+        <input type="text" id="hw-title" required />
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <textarea id="hw-description" rows="3"></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Optional Image</label>
+          <input type="file" id="hw-image" accept="image/*" />
+        </div>
+        <div class="form-group">
+          <label>Deadline</label>
+          <input type="datetime-local" id="hw-deadline" />
+        </div>
+      </div>
+      <button type="submit" class="btn">+ Assign Homework</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-title flex-between">
+      <span>All Homework</span>
+      <label class="flex gap-8" style="font-size:13px; font-weight:500;">
+        <input type="checkbox" id="show-expired" style="width:auto;" /> Show Expired
+      </label>
+    </div>
+    <div id="hw-list"><div class="spinner"></div></div>
+  </div>
+</div>
+
+<script src="../../shared/js/supabase-client.js"></script>
+<script src="../../shared/js/auth.js"></script>
+<script src="../../shared/js/utils.js"></script>
+<script>
+let allSubjects = [];
+let allHomework = [];
+
+(async () => {
+  const profile = await Auth.guard('admin');
+  if (!profile) return;
+
+  const { data: subs } = await sb.from('subjects').select('*').order('name');
+  allSubjects = subs || [];
+
+  Utils.fillBoardSelect(document.getElementById('hw-board'));
+  document.getElementById('hw-board').addEventListener('change', e => {
+    Utils.fillClassSelect(document.getElementById('hw-class'), e.target.value);
+    fillSubjectSelect();
+  });
+  document.getElementById('hw-class').addEventListener('change', fillSubjectSelect);
+  document.getElementById('show-expired').addEventListener('change', renderHomework);
+
+  await loadHomework();
+})();
+
+function fillSubjectSelect() {
+  const board = document.getElementById('hw-board').value;
+  const cls = document.getElementById('hw-class').value;
+  const sel = document.getElementById('hw-subject');
+  sel.innerHTML = '<option value="">-- Optional --</option>';
+  allSubjects.filter(s => s.board === board && s.class === cls).forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.textContent = s.name;
+    sel.appendChild(opt);
+  });
+}
+
+document.getElementById('hw-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const board = document.getElementById('hw-board').value;
+  const cls = document.getElementById('hw-class').value;
+  const subjectId = document.getElementById('hw-subject').value || null;
+  const title = document.getElementById('hw-title').value.trim();
+  const description = document.getElementById('hw-description').value.trim();
+  const deadline = document.getElementById('hw-deadline').value || null;
+  const imageFile = document.getElementById('hw-image').files[0];
+
+  let imageUrl = null;
+  if (imageFile) {
+    const fileName = `${Date.now()}_${imageFile.name}`;
+    const { error: uploadErr } = await sb.storage.from('homework-images').upload(fileName, imageFile);
+    if (uploadErr) {
+      Utils.toast('Image upload failed: ' + uploadErr.message, 'error');
+      return;
+    }
+    const { data: urlData } = sb.storage.from('homework-images').getPublicUrl(fileName);
+    imageUrl = urlData.publicUrl;
+  }
+
+  const profile = await Auth.getProfile();
+
+  const { error } = await sb.from('homework').insert({
+    title, description,
+    board, class: cls,
+    subject_id: subjectId,
+    deadline,
+    image_url: imageUrl,
+    created_by: profile.id
+  });
+
+  if (error) {
+    Utils.toast('Failed: ' + error.message, 'error');
+  } else {
+    Utils.toast('Homework assigned', 'success');
+    document.getElementById('hw-form').reset();
+    document.getElementById('hw-class').innerHTML = '<option value="">-- Select Class --</option>';
+    await loadHomework();
+  }
+});
+
+async function loadHomework() {
+  const { data, error } = await sb
+    .from('homework')
+    .select('*, subjects(name)')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    Utils.toast('Error: ' + error.message, 'error');
+    return;
+  }
+  allHomework = data || [];
+  renderHomework();
+}
+
+function renderHomework() {
+  const showExpired = document.getElementById('show-expired').checked;
+  const now = new Date();
+
+  let filtered = allHomework;
+  if (!showExpired) {
+    filtered = filtered.filter(h => !h.deadline || new Date(h.deadline) >= now);
+  }
+
+  const container = document.getElementById('hw-list');
+  if (!filtered.length) {
+    container.innerHTML = `<div class="empty-state"><div class="icon">📭</div>No homework found</div>`;
+    return;
+  }
+
+  container.innerHTML = filtered.map(h => {
+    const expired = h.deadline && new Date(h.deadline) < now;
+    return `
+    <div class="list-item">
+      <div class="flex-between flex-wrap gap-8">
+        <div>
+          <strong>${Utils.escapeHtml(h.title)}</strong>
+          ${expired ? '<span class="badge badge-inactive">Expired</span>' : ''}
+          <div class="text-sm text-muted">${h.board} - ${h.class} ${h.subjects ? '• ' + h.subjects.name : ''}</div>
+          ${h.description ? `<p class="text-sm mt-8">${Utils.escapeHtml(h.description)}</p>` : ''}
+          ${h.image_url ? `<img src="${h.image_url}" style="max-width:200px;border-radius:8px;margin-top:8px;" />` : ''}
+          <div class="text-sm text-muted mt-8">Deadline: ${h.deadline ? Utils.formatDateTime(h.deadline) : 'No deadline'}</div>
+        </div>
+        <button class="btn btn-sm btn-danger" onclick="deleteHomework('${h.id}')">Delete</button>
+      </div>
+    </div>
+  `;
+  }).join('');
+}
+
+async function deleteHomework(id) {
+  if (!confirm('Delete this homework?')) return;
+  const { error } = await sb.from('homework').delete().eq('id', id);
+  if (error) {
+    Utils.toast('Delete failed: ' + error.message, 'error');
+  } else {
+    Utils.toast('Homework deleted', 'success');
+    await loadHomework();
+  }
+}
+</script>
+</body>
+</html>

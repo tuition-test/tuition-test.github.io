@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="base-path" content="../" />
+<meta name="theme-color" content="#0b0d12" />
+<title>Admin Portal — Tuition</title>
+<link rel="manifest" href="../manifest.webmanifest" />
+<link rel="apple-touch-icon" href="../apple-touch-icon.png" />
+<link rel="icon" href="../icon-192.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" />
+<link rel="stylesheet" href="../shared/css/styles.css" />
+<script>(function(){try{var t=localStorage.getItem('tuition.theme')||'dark';document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <button class="hamburger" id="hamburger-btn" aria-label="Menu">☰</button>
+    <span>🎓 Admin Portal</span>
+  </div>
+  <div class="user-info">
+    <button class="btn btn-sm btn-outline" id="theme-toggle" type="button" title="Toggle theme">🌓</button>
+    <span id="admin-name">Admin</span>
+    <div class="avatar" id="admin-avatar">A</div>
+  </div>
+</div>
+
+<div class="app-shell">
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+  <aside class="sidebar" id="sidebar">
+    <nav id="sidebar-nav">
+      <a data-page="pages/home.html" class="active"><span class="icon">🏠</span> Home</a>
+      <a data-page="pages/users.html"><span class="icon">👥</span> Users</a>
+      <a data-page="pages/subjects.html"><span class="icon">📚</span> Subject Management</a>
+      <a data-page="pages/fees.html"><span class="icon">💰</span> Fee Management</a>
+      <a data-page="pages/homework.html"><span class="icon">📝</span> Homework</a>
+      <a data-page="pages/notices.html"><span class="icon">📢</span> Notice</a>
+      <a data-page="pages/tests.html"><span class="icon">🧪</span> Question Bank</a>
+      <a data-page="pages/test-assembly.html"><span class="icon">📋</span> Test Assembly</a>
+      <a data-page="pages/resources.html"><span class="icon">📁</span> Resource Upload</a>
+      <a data-page="pages/comments.html"><span class="icon">💬</span> Comments</a>
+      <a data-page="pages/settings.html"><span class="icon">⚙️</span> Settings</a>
+      <a id="logout-link"><span class="icon">🚪</span> Logout</a>
+    </nav>
+  </aside>
+
+  <div class="content-frame-wrap">
+    <iframe id="content-frame" title="Admin Content"></iframe>
+  </div>
+</div>
+
+<script src="../shared/js/supabase-client.js"></script>
+<script src="../shared/js/auth.js"></script>
+<script src="../shared/js/utils.js"></script>
+<script src="../shared/js/app-shell.js"></script>
+<script>
+  let currentProfile = null;
+
+  (async () => {
+    currentProfile = await Auth.guard('admin');
+    if (!currentProfile) return;
+
+    document.getElementById('admin-name').textContent = currentProfile.name;
+    document.getElementById('admin-avatar').textContent = (currentProfile.name || 'A').charAt(0).toUpperCase();
+    loadPage('pages/home.html');
+  })();
+
+  function loadPage(page, navEl) {
+    AppShell.loadFrame('content-frame', page);
+    document.querySelectorAll('#sidebar-nav a[data-page]').forEach(a => a.classList.remove('active'));
+    if (navEl) navEl.classList.add('active');
+    closeSidebar();
+  }
+
+  document.querySelectorAll('#sidebar-nav a[data-page]').forEach(a => {
+    a.addEventListener('click', () => loadPage(a.dataset.page, a));
+  });
+
+  document.getElementById('logout-link').addEventListener('click', async () => {
+    if (confirm('Are you sure you want to logout?')) await Auth.logout();
+  });
+
+  document.getElementById('theme-toggle').addEventListener('click', () => AppShell.toggleTheme());
+
+  // Mobile sidebar toggle
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebar-overlay');
+  document.getElementById('hamburger-btn').addEventListener('click', () => {
+    sidebar.classList.toggle('open');
+    overlay.classList.toggle('show');
+  });
+  overlay.addEventListener('click', closeSidebar);
+  function closeSidebar() {
+    sidebar.classList.remove('open');
+    overlay.classList.remove('show');
+  }
+  AppShell.registerPWA('../');
+</script>
+</body>
+</html>

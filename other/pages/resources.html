@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="base-path" content="../../" />
+<title>Resources</title>
+<link rel="stylesheet" href="../../shared/css/styles.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<div class="page">
+  <h2>📁 Resources</h2>
+  <div class="card">
+    <div class="card-title">Available Resources</div>
+    <div id="res-list"><div class="spinner"></div></div>
+  </div>
+</div>
+
+<script src="../../shared/js/supabase-client.js"></script>
+<script src="../../shared/js/auth.js"></script>
+<script src="../../shared/js/utils.js"></script>
+<script>
+(async () => {
+  const profile = await Auth.guard('other_student');
+  if (!profile) return;
+
+  const { data, error } = await sb
+    .from('resources')
+    .select('*, subjects(name)')
+    .eq('visible_to_other_students', true)
+    .order('created_at', { ascending: false });
+
+  const container = document.getElementById('res-list');
+
+  if (error) {
+    container.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div>Error loading resources</div>`;
+    return;
+  }
+
+  if (!data || !data.length) {
+    container.innerHTML = `<div class="empty-state"><div class="icon">📭</div>No resources available</div>`;
+    return;
+  }
+
+  container.innerHTML = data.map(r => `
+    <div class="list-item">
+      <strong>${Utils.escapeHtml(r.title)}</strong>
+      ${r.subjects ? `<span class="chip">${Utils.escapeHtml(r.subjects.name)}</span>` : ''}
+      ${r.description ? `<p class="text-sm mt-8">${Utils.escapeHtml(r.description)}</p>` : ''}
+      <div class="text-sm mt-8"><a href="${r.file_url}" target="_blank">📎 Download / View</a></div>
+      <div class="text-sm text-muted mt-8">${Utils.formatDate(r.created_at)}</div>
+    </div>
+  `).join('');
+})();
+</script>
+</body>
+</html>

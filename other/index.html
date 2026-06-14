@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="base-path" content="../" />
+<meta name="theme-color" content="#0b0d12" media="(prefers-color-scheme: dark)" />
+<title>Portal — Tuition</title>
+
+<link rel="manifest" href="../manifest.webmanifest" />
+<link rel="apple-touch-icon" href="../apple-touch-icon.png" />
+<link rel="icon" href="../icon-192.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" />
+<link rel="stylesheet" href="../shared/css/styles.css" />
+
+<script>(function(){try{var t=localStorage.getItem('tuition.theme')||'dark';document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();</script>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<header class="topbar-v2">
+  <div class="tb-avatar" id="tb-avatar" role="button" aria-label="Open profile" tabindex="0">
+    <span id="tb-avatar-initial">U</span>
+  </div>
+  <div class="tb-meta">
+    <div class="tb-name" id="tb-name">User</div>
+    <div class="tb-sub" id="tb-sub">Other Student</div>
+  </div>
+  <button class="tb-iconbtn" id="tb-bell" aria-label="Notices">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+    <span class="tb-dot hidden" id="tb-bell-count">0</span>
+  </button>
+  <button class="tb-iconbtn" id="tb-theme" aria-label="Toggle theme">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+  </button>
+</header>
+
+<main class="content-frame-wrap">
+  <iframe id="content-frame" title="Content"></iframe>
+</main>
+
+<nav class="bottom-nav">
+  <button data-page="pages/home.html" class="active">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2h-4a1 1 0 0 1-1-1v-6h-4v6a1 1 0 0 1-1 1H5a2 2 0 0 1-2-2z"/></svg>
+    <span>Home</span>
+  </button>
+  <button data-page="pages/tests.html">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 14l2 2 4-4"/></svg>
+    <span>Tests</span>
+  </button>
+  <button id="nav-other-btn">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+    <span>Other</span>
+  </button>
+</nav>
+
+<!-- PROFILE SHEET -->
+<div class="sheet-overlay" id="profile-sheet-overlay" data-sheet="profile-sheet"></div>
+<aside class="sheet" id="profile-sheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-title"><span>👤 Account</span><button class="btn btn-sm btn-outline" data-close="profile-sheet">Close</button></div>
+  <div class="sheet-list">
+    <div class="sheet-item" style="background: var(--gradient-soft); border-color: var(--border-strong);">
+      <div class="si-icon" id="profile-big-avatar"><span id="profile-big-initial">U</span></div>
+      <div class="si-body"><div class="si-title" id="profile-big-name">User</div><div class="si-sub" id="profile-big-class">Other Student</div></div>
+    </div>
+    <button class="sheet-item" data-page="pages/profile.html">
+      <div class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></div>
+      <div class="si-body"><div class="si-title">My Profile</div><div class="si-sub">Edit details & password</div></div>
+      <span class="si-chev">›</span>
+    </button>
+    <div class="theme-switch">
+      <div style="display:flex;align-items:center;gap:14px;">
+        <div class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></div>
+        <div><div style="font-weight:700;color:var(--text-strong);">Dark mode</div><div style="font-size:12px;color:var(--text-muted);" id="theme-label">Currently dark</div></div>
+      </div>
+      <div id="theme-switch-toggle" class="theme-switch-toggle on" role="switch"></div>
+    </div>
+    <button class="sheet-item" id="profile-logout">
+      <div class="si-icon" style="background: rgba(248,113,113,.14); color: var(--danger);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></div>
+      <div class="si-body"><div class="si-title" style="color: var(--danger);">Logout</div><div class="si-sub">Sign out</div></div>
+    </button>
+  </div>
+</aside>
+
+<!-- NOTICES SHEET -->
+<div class="sheet-overlay" id="notice-sheet-overlay" data-sheet="notice-sheet"></div>
+<aside class="sheet" id="notice-sheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-title"><span>🔔 Notices</span><button class="btn btn-sm" data-page="pages/notices.html" data-close="notice-sheet">Open all</button></div>
+  <div id="notice-sheet-list" class="sheet-list"><div class="spinner"></div></div>
+</aside>
+
+<!-- OTHER SHEET -->
+<div class="sheet-overlay" id="other-sheet-overlay" data-sheet="other-sheet"></div>
+<aside class="sheet" id="other-sheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-title"><span>✨ More</span><button class="btn btn-sm btn-outline" data-close="other-sheet">Close</button></div>
+  <div class="sheet-list">
+    <button class="sheet-item" data-page="pages/notices.html">
+      <div class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-8v18l-18-8z"/></svg></div>
+      <div class="si-body"><div class="si-title">Notices</div><div class="si-sub">Announcements</div></div><span class="si-chev">›</span>
+    </button>
+    <button class="sheet-item" data-page="pages/resources.html">
+      <div class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div>
+      <div class="si-body"><div class="si-title">Resources</div><div class="si-sub">Files & notes</div></div><span class="si-chev">›</span>
+    </button>
+    <button class="sheet-item" data-page="pages/contact.html">
+      <div class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 1 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></div>
+      <div class="si-body"><div class="si-title">Tuition Info</div><div class="si-sub">Address, contact</div></div><span class="si-chev">›</span>
+    </button>
+    <button class="sheet-item" data-page="pages/comments.html">
+      <div class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+      <div class="si-body"><div class="si-title">Comments</div><div class="si-sub">Feedback & replies</div></div><span class="si-chev">›</span>
+    </button>
+    <button class="sheet-item" data-page="pages/profile.html">
+      <div class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></div>
+      <div class="si-body"><div class="si-title">Profile</div><div class="si-sub">Edit your details</div></div><span class="si-chev">›</span>
+    </button>
+  </div>
+</aside>
+
+<script src="../shared/js/supabase-client.js"></script>
+<script src="../shared/js/auth.js"></script>
+<script src="../shared/js/utils.js"></script>
+<script src="../shared/js/app-shell.js"></script>
+<script>
+let currentProfile = null;
+
+(async () => {
+  const profile = await Auth.guard('other_student');
+  if (!profile) return;
+  currentProfile = profile;
+
+  const initial = (profile.name || 'U').charAt(0).toUpperCase();
+  document.getElementById('tb-avatar-initial').textContent = initial;
+  document.getElementById('profile-big-initial').textContent = initial;
+  document.getElementById('tb-name').textContent = profile.name || 'User';
+  document.getElementById('profile-big-name').textContent = profile.name || 'User';
+  const sub = [profile.board, profile.class].filter(Boolean).join(' • ') || 'Other Student';
+  document.getElementById('tb-sub').textContent = sub;
+  document.getElementById('profile-big-class').textContent = sub;
+
+  if (profile.profile_picture_url) {
+    document.getElementById('tb-avatar').innerHTML = '<img src="' + profile.profile_picture_url + '" alt="Profile"/>';
+    document.getElementById('profile-big-avatar').innerHTML = '<img src="' + profile.profile_picture_url + '" alt="Profile" style="width:100%;height:100%;object-fit:cover;border-radius:12px;" />';
+  }
+
+  loadPage('pages/home.html', document.querySelector('.bottom-nav [data-page="pages/home.html"]'));
+  loadNotices();
+})();
+
+function loadPage(page, btnEl) {
+  AppShell.loadFrame('content-frame', page);
+  document.querySelectorAll('.bottom-nav button').forEach(b => b.classList.remove('active'));
+  if (btnEl) btnEl.classList.add('active');
+  else {
+    const m = document.querySelector('.bottom-nav [data-page="' + page.split('?')[0] + '"]');
+    if (m) m.classList.add('active');
+  }
+  AppShell.closeAllSheets();
+}
+
+document.querySelectorAll('.bottom-nav button[data-page]').forEach(b =>
+  b.addEventListener('click', () => loadPage(b.dataset.page, b))
+);
+document.getElementById('nav-other-btn').addEventListener('click', () => {
+  document.querySelectorAll('.bottom-nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('nav-other-btn').classList.add('active');
+  AppShell.openSheet('other-sheet');
+});
+
+document.getElementById('tb-avatar').addEventListener('click', () => AppShell.openSheet('profile-sheet'));
+document.getElementById('tb-bell').addEventListener('click', () => { AppShell.openSheet('notice-sheet'); loadNotices(); });
+
+function syncThemeUI() {
+  const t = AppShell.getTheme();
+  document.getElementById('theme-switch-toggle').classList.toggle('on', t === 'dark');
+  document.getElementById('theme-label').textContent = 'Currently ' + t;
+}
+syncThemeUI();
+document.getElementById('tb-theme').addEventListener('click', () => { AppShell.toggleTheme(); syncThemeUI(); });
+document.getElementById('theme-switch-toggle').addEventListener('click', () => { AppShell.toggleTheme(); syncThemeUI(); });
+
+document.querySelectorAll('.sheet-item[data-page]').forEach(b =>
+  b.addEventListener('click', () => loadPage(b.dataset.page))
+);
+document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => {
+  if (b.dataset.page) loadPage(b.dataset.page);
+  AppShell.closeSheet(b.dataset.close);
+}));
+document.querySelectorAll('.sheet-overlay').forEach(o =>
+  o.addEventListener('click', () => AppShell.closeSheet(o.dataset.sheet))
+);
+
+document.getElementById('profile-logout').addEventListener('click', async () => {
+  if (confirm('Logout from your account?')) await Auth.logout();
+});
+
+async function loadNotices() {
+  const list = document.getElementById('notice-sheet-list');
+  list.innerHTML = '<div class="spinner"></div>';
+  const notices = await AppShell.fetchRecentNotices(currentProfile, 15);
+  const countEl = document.getElementById('tb-bell-count');
+  const bell = document.getElementById('tb-bell');
+  if (notices.length === 0) {
+    list.innerHTML = '<div class="card text-center text-muted">No notices yet.</div>';
+    countEl.classList.add('hidden'); bell.classList.remove('has-unread'); return;
+  }
+  countEl.textContent = notices.length > 9 ? '9+' : String(notices.length);
+  countEl.classList.remove('hidden');
+  bell.classList.add('has-unread');
+  list.innerHTML = notices.map(n => {
+    const t = Utils.escapeHtml(n.title || n.subject || 'Notice');
+    const b = Utils.escapeHtml((n.body || n.message || n.content || '').substring(0, 90));
+    const w = Utils.formatDateTime(n.created_at || n.date);
+    return `<div class="sheet-item" data-open-notices>
+      <div class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-8v18l-18-8z"/></svg></div>
+      <div class="si-body"><div class="si-title">${t}</div><div class="si-sub">${b || w}</div></div></div>`;
+  }).join('');
+  list.querySelectorAll('[data-open-notices]').forEach(el => el.addEventListener('click', () => loadPage('pages/notices.html')));
+}
+
+AppShell.registerPWA('../');
+</script>
+</body>
+</html>

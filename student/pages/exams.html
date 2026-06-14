@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="base-path" content="../../" />
+<title>Tests - Student</title>
+<link rel="stylesheet" href="../../shared/css/styles.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<div class="page">
+  <h2>🧪 Tests</h2>
+
+  <div class="card">
+    <div class="card-title">Available Tests</div>
+    <div id="tests-list"><div class="spinner"></div></div>
+  </div>
+
+  <div class="card" id="test-area" style="display:none;">
+    <div class="card-title" id="test-title"></div>
+    <div id="test-questions"></div>
+    <button class="btn btn-block" id="submit-test-btn">Submit Test</button>
+  </div>
+
+  <div class="card hidden" id="result-area">
+    <div class="card-title">Result</div>
+    <div id="result-content"></div>
+  </div>
+</div>
+
+<script src="../../shared/js/supabase-client.js"></script>
+<script src="../../shared/js/auth.js"></script>
+<script src="../../shared/js/utils.js"></script>
+<script>
+let currentProfile = null;
+let currentTest = null;
+let currentQuestions = [];
+
+(async () => {
+  currentProfile = await Auth.guard('tuition_student');
+  if (!currentProfile) return;
+
+  const { data, error } = await sb
+    .from('tests')
+    .select('*, subjects(name)')
+    .eq('board', currentProfile.board)
+    .eq('class', currentProfile.class)
+    .order('created_at', { ascending: false });
+
+  const container = document.getElementById('tests-list');
+
+  if (error) {
+    container.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div>Error loading tests</div>`;
+    return;
+  }
+
+  if (!data || !data.length) {
+    container.innerHTML = `<div class="empty-state"><div class="icon">📭</div>No tests available currently</div>`;
+    return;
+  }
+
+  container.innerHTML = data.map(t => `
+    <div class="list-item flex-between flex-wrap gap-8">
+      <div>
+        <strong>${Utils.escapeHtml(t.title)}</strong>
+        ${t.subjects ? `<span class="chip">${Utils.escapeHtml(t.subjects.name)}</span>` : ''}
+        <div class="text-sm text-muted mt-8">${t.description || ''} ${t.duration_minutes ? '• ' + t.duration_minutes + ' min' : ''}</div>
+      </div>
+      <button class="btn btn-sm" onclick="startTest('${t.id}')">Start Test</button>
+    </div>
+  `).join('');
+})();
+
+async function startTest(testId) {
+  const { data: test } = await sb.from('tests').select('*').eq('id', testId).single();
+  const { data: tq } = await sb.from('test_questions').select('question_id').eq('test_id', testId);
+
+  if (!tq || !tq.length) {
+    Utils.toast('This test has no questions yet', 'warning');
+    return;
+  }
+
+  const ids = tq.map(x => x.question_id);
+  const { data: questions } = await sb.from('questions').select('*').in('id', ids);
+
+  currentTest = test;
+  currentQuestions = questions || [];
+
+  document.getElementById('test-title').textContent = test.title;
+  document.getElementById('test-area').style.display = 'block';
+  document.getElementById('result-area').classList.add('hidden');
+
+  document.getElementById('test-questions').innerHTML = currentQuestions.map((q, idx) => `
+    <div class="card" style="box-shadow:none;border:1px solid var(--border);">
+      <p class="font-bold">${idx + 1}. ${Utils.escapeHtml(q.question)}</p>
+      <div class="flex flex-wrap gap-8 mt-8">
+        ${['A','B','C','D'].map(letter => {
+          const optText = q['option_' + letter.toLowerCase()];
+          if (!optText) return '';
+          return `
+          <label class="flex gap-8" style="background:var(--bg);padding:8px 12px;border-radius:8px;cursor:pointer;flex:1;min-width:140px;">
+            <input type="radio" name="q-${q.id}" value="${letter}" style="width:auto;" />
+            ${letter}. ${Utils.escapeHtml(optText)}
+          </label>`;
+        }).join('')}
+      </div>
+    </div>
+  `).join('');
+
+  document.getElementById('test-area').scrollIntoView({ behavior: 'smooth' });
+}
+
+document.getElementById('submit-test-btn').addEventListener('click', async () => {
+  let score = 0;
+  const answers = {};
+
+  currentQuestions.forEach(q => {
+    const selected = document.querySelector(`input[name="q-${q.id}"]:checked`);
+    const ans = selected ? selected.value : null;
+    answers[q.id] = ans;
+    if (ans === q.correct_answer) score++;
+  });
+
+  const percentage = (score / currentQuestions.length) * 100;
+
+  const { error } = await sb.from('test_attempts').insert({
+    test_id: currentTest.id,
+    student_id: currentProfile.id,
+    score: percentage,
+    answers
+  });
+
+  if (error) {
+    Utils.toast('Failed to submit: ' + error.message, 'error');
+    return;
+  }
+
+  document.getElementById('test-area').style.display = 'none';
+  document.getElementById('result-area').classList.remove('hidden');
+  document.getElementById('result-content').innerHTML = `
+    <p class="font-bold" style="font-size:18px;">You scored ${score} / ${currentQuestions.length} (${percentage.toFixed(1)}%)</p>
+    <div class="mt-16">
+      ${currentQuestions.map((q, idx) => {
+        const userAns = answers[q.id];
+        const correct = userAns === q.correct_answer;
+        return `
+        <div class="list-item">
+          <p>${idx+1}. ${Utils.escapeHtml(q.question)}</p>
+          <p class="text-sm">Your answer: <strong>${userAns || 'Not answered'}</strong> ${correct ? '✅' : `❌ (Correct: ${q.correct_answer})`}</p>
+          ${q.explanation ? `<p class="text-sm text-muted mt-8">💡 ${Utils.escapeHtml(q.explanation)}</p>` : ''}
+        </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+  document.getElementById('result-area').scrollIntoView({ behavior: 'smooth' });
+});
+</script>
+</body>
+</html>

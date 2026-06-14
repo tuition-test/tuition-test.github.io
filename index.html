@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="base-path" content="./" />
+<meta name="theme-color" content="#0b0d12" media="(prefers-color-scheme: dark)" />
+<meta name="theme-color" content="#6366f1" media="(prefers-color-scheme: light)" />
+<title>Tuition Portal — Login</title>
+
+<link rel="manifest" href="./manifest.webmanifest" />
+<link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+<link rel="icon" href="./icon-192.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Tuition" />
+<meta name="mobile-web-app-capable" content="yes" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" />
+<link rel="stylesheet" href="shared/css/styles.css" />
+
+<script>
+  // Apply theme immediately to avoid flash
+  (function(){
+    try {
+      var t = localStorage.getItem('tuition.theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', t);
+    } catch(e){ document.documentElement.setAttribute('data-theme','dark'); }
+  })();
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<div class="auth-page">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <div class="emoji">🎓</div>
+      <h1>Tuition Portal</h1>
+      <p class="helper-text" style="margin-top:6px;">Sign in to continue learning</p>
+    </div>
+
+    <div class="tabs">
+      <button id="tab-login" class="active" onclick="switchTab('login')">Login</button>
+      <button id="tab-register" onclick="switchTab('register')">Register</button>
+    </div>
+
+    <!-- LOGIN PANEL -->
+    <div id="panel-login" class="tab-panel active">
+      <form id="login-form">
+        <div class="form-group">
+          <label>Username</label>
+          <input type="text" id="login-username" required autocomplete="username" />
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="login-password" required autocomplete="current-password" />
+        </div>
+        <div id="login-error" class="error-text hidden"></div>
+        <button type="submit" class="btn btn-block mt-8" id="login-btn">Login</button>
+      </form>
+    </div>
+
+    <!-- REGISTER PANEL -->
+    <div id="panel-register" class="tab-panel">
+      <form id="register-form">
+        <div class="form-group">
+          <label>Full Name *</label>
+          <input type="text" id="reg-name" required />
+        </div>
+        <div class="form-group">
+          <label>Mobile Number *</label>
+          <input type="tel" id="reg-mobile" required pattern="[0-9]{10}" placeholder="10-digit mobile number" />
+        </div>
+        <div class="form-group">
+          <label>Email (optional)</label>
+          <input type="email" id="reg-email" placeholder="for communication only" />
+        </div>
+        <div class="form-group">
+          <label>Username *</label>
+          <input type="text" id="reg-username" required pattern="[a-zA-Z0-9_]{4,20}" placeholder="4-20 chars, letters/numbers/underscore" />
+        </div>
+        <div class="form-group">
+          <label>Password *</label>
+          <input type="password" id="reg-password" required minlength="6" placeholder="min 6 characters" />
+        </div>
+        <div id="register-error" class="error-text hidden"></div>
+        <div id="register-success" class="helper-text hidden" style="color: var(--success); font-weight:600;"></div>
+        <button type="submit" class="btn btn-block mt-8" id="register-btn">Create Account</button>
+        <p class="helper-text text-center mt-8">New accounts are registered as "Other Student". Tuition students are upgraded by admin.</p>
+      </form>
+    </div>
+
+    <p class="text-center text-sm mt-16" id="deactivated-msg" style="color: var(--danger); font-weight:600;"></p>
+
+    <div class="text-center mt-16">
+      <button id="theme-toggle" class="btn btn-outline btn-sm" type="button">🌓 Toggle theme</button>
+    </div>
+  </div>
+</div>
+
+<script src="shared/js/supabase-client.js"></script>
+<script src="shared/js/auth.js"></script>
+<script src="shared/js/utils.js"></script>
+<script src="shared/js/app-shell.js"></script>
+<script>
+  function switchTab(tab) {
+    document.getElementById('tab-login').classList.toggle('active', tab === 'login');
+    document.getElementById('tab-register').classList.toggle('active', tab === 'register');
+    document.getElementById('panel-login').classList.toggle('active', tab === 'login');
+    document.getElementById('panel-register').classList.toggle('active', tab === 'register');
+  }
+
+  document.getElementById('theme-toggle').addEventListener('click', () => AppShell.toggleTheme());
+
+  // Already-logged-in redirect
+  (async () => {
+    const session = await Auth.getSession();
+    if (!session) {
+      const params = new URLSearchParams(location.search);
+      if (params.get('deactivated') === '1') {
+        document.getElementById('deactivated-msg').textContent = 'Your account has been deactivated. Contact admin.';
+      }
+      return;
+    }
+    const profile = await Auth.getProfile();
+    if (!profile) return;
+    if (profile.role === 'admin') location.href = 'admin/index.html';
+    else if (profile.role === 'tuition_student') location.href = 'student/index.html';
+    else location.href = 'other/index.html';
+  })();
+
+  document.getElementById('login-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('login-btn');
+    const err = document.getElementById('login-error');
+    err.classList.add('hidden'); btn.disabled = true; btn.textContent = 'Signing in...';
+    try {
+      const { profile } = await Auth.login(
+        document.getElementById('login-username').value,
+        document.getElementById('login-password').value
+      );
+      if (profile.role === 'admin') location.href = 'admin/index.html';
+      else if (profile.role === 'tuition_student') location.href = 'student/index.html';
+      else location.href = 'other/index.html';
+    } catch (ex) {
+      err.textContent = ex.message || 'Login failed.'; err.classList.remove('hidden');
+      btn.disabled = false; btn.textContent = 'Login';
+    }
+  });
+
+  document.getElementById('register-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('register-btn');
+    const err = document.getElementById('register-error');
+    const ok = document.getElementById('register-success');
+    err.classList.add('hidden'); ok.classList.add('hidden');
+    btn.disabled = true; btn.textContent = 'Creating...';
+    try {
+      await Auth.register({
+        name: document.getElementById('reg-name').value.trim(),
+        mobile: document.getElementById('reg-mobile').value.trim(),
+        email: document.getElementById('reg-email').value.trim(),
+        username: document.getElementById('reg-username').value.trim(),
+        password: document.getElementById('reg-password').value
+      });
+      ok.textContent = 'Account created! Redirecting...'; ok.classList.remove('hidden');
+      setTimeout(() => location.href = 'other/index.html', 800);
+    } catch (ex) {
+      err.textContent = ex.message || 'Registration failed.'; err.classList.remove('hidden');
+      btn.disabled = false; btn.textContent = 'Create Account';
+    }
+  });
+
+  AppShell.registerPWA('./');
+</script>
+</body>
+</html>

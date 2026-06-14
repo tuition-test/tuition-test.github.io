@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="base-path" content="../../" />
+<title>Tuition Info</title>
+<link rel="stylesheet" href="../../shared/css/styles.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<div class="page">
+  <h2>📍 Tuition Information</h2>
+
+  <div class="card" id="info-card">
+    <div class="spinner"></div>
+  </div>
+
+  <div class="card" id="map-card" style="display:none;">
+    <div class="card-title">Location</div>
+    <a id="map-link" href="#" target="_blank" class="btn">📍 Open in Google Maps</a>
+  </div>
+
+  <div class="card" id="social-card" style="display:none;">
+    <div class="card-title">Follow Us</div>
+    <div class="flex flex-wrap gap-8" id="social-links"></div>
+  </div>
+</div>
+
+<script src="../../shared/js/supabase-client.js"></script>
+<script src="../../shared/js/auth.js"></script>
+<script src="../../shared/js/utils.js"></script>
+<script>
+(async () => {
+  const profile = await Auth.guard('other_student');
+  if (!profile) return;
+
+  const { data, error } = await sb.from('settings').select('*').eq('id', 1).maybeSingle();
+  const infoCard = document.getElementById('info-card');
+
+  if (error || !data) {
+    infoCard.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div>Information not available</div>`;
+    return;
+  }
+
+  infoCard.innerHTML = `
+    <div class="card-title">Contact Details</div>
+    <p><strong>📍 Address:</strong><br/>${Utils.escapeHtml(data.tuition_address || 'Not provided')}</p>
+    <p><strong>📞 Contact:</strong> ${Utils.escapeHtml(data.contact_number || 'Not provided')}</p>
+  `;
+
+  if (data.google_map_link) {
+    document.getElementById('map-card').style.display = 'block';
+    document.getElementById('map-link').href = data.google_map_link;
+  }
+
+  const socials = [
+    { key: 'facebook_link', label: '📘 Facebook' },
+    { key: 'instagram_link', label: '📷 Instagram' },
+    { key: 'youtube_link', label: '▶️ YouTube' },
+    { key: 'whatsapp_link', label: '💬 WhatsApp' },
+  ];
+
+  const activeSocials = socials.filter(s => data[s.key]);
+  if (activeSocials.length) {
+    document.getElementById('social-card').style.display = 'block';
+    document.getElementById('social-links').innerHTML = activeSocials.map(s => `
+      <a href="${data[s.key]}" target="_blank" class="btn btn-outline">${s.label}</a>
+    `).join('');
+  }
+})();
+</script>
+</body>
+</html>

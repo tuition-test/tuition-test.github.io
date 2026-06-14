@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="base-path" content="../../" />
+<title>Test Management - Admin</title>
+<link rel="stylesheet" href="../../shared/css/styles.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+<div class="page">
+  <h2>🧪 Test Management — Question Bank</h2>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">Total Questions</div>
+      <div class="stat-value" id="stat-total">0</div>
+    </div>
+    <div class="stat-card success">
+      <div class="stat-label">Subjects Covered</div>
+      <div class="stat-value" id="stat-subjects">0</div>
+    </div>
+    <div class="stat-card warning">
+      <div class="stat-label">Chapters Covered</div>
+      <div class="stat-value" id="stat-chapters">0</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Upload Questions via Excel</div>
+    <p class="text-sm text-muted">
+      Required columns (header row, in any order):
+      <strong>Question ID, Chapter, Question, Option A, Option B, Option C, Option D, Correct Answer, Explanation, Subject, Class, Board</strong>.
+      "Question ID" can be left blank — a unique ID will be auto-generated.
+      "Correct Answer" must be A, B, C, or D. "Subject" must match an existing subject name.
+    </p>
+    <div class="form-row" style="align-items:flex-end;">
+      <div class="form-group mb-0">
+        <label>Excel File (.xlsx)</label>
+        <input type="file" id="excel-file" accept=".xlsx,.xls" />
+      </div>
+      <div class="form-group mb-0">
+        <button class="btn" onclick="downloadTemplate()">⬇ Download Template</button>
+      </div>
+      <div class="form-group mb-0">
+        <button class="btn btn-success" id="upload-btn" onclick="uploadExcel()">⬆ Upload Questions</button>
+      </div>
+    </div>
+    <div id="upload-status" class="mt-16"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title flex-between">
+      <span>Questions per Subject</span>
+    </div>
+    <div id="subject-breakdown"><div class="spinner"></div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title flex-between">
+      <span>Questions per Chapter</span>
+    </div>
+    <div id="chapter-breakdown"><div class="spinner"></div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title flex-between">
+      <span>Question Bank</span>
+      <div class="flex gap-8 flex-wrap">
+        <select id="filter-subject" style="width:auto;"><option value="">All Subjects</option></select>
+        <input type="text" id="search-q" placeholder="Search question..." style="width:200px;" />
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Code</th><th>Subject</th><th>Class</th><th>Chapter</th><th>Question</th><th>Answer</th><th>Actions</th></tr>
+        </thead>
+        <tbody id="q-tbody">
+          <tr><td colspan="7" class="text-center"><div class="spinner"></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- VIEW/EDIT QUESTION MODAL -->
+<div class="modal-backdrop hidden" id="q-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Edit Question</h3>
+      <button class="modal-close" onclick="document.getElementById('q-modal').classList.add('hidden')">✕</button>
+    </div>
+    <form id="q-form">
+      <input type="hidden" id="q-id" />
+      <div class="form-group">
+        <label>Question</label>
+        <textarea id="q-question" rows="2" required></textarea>
+      </div>
+      <div class="form-group">
+        <label>Chapter</label>
+        <input type="text" id="q-chapter" />
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Option A</label><input type="text" id="q-a" /></div>
+        <div class="form-group"><label>Option B</label><input type="text" id="q-b" /></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Option C</label><input type="text" id="q-c" /></div>
+        <div class="form-group"><label>Option D</label><input type="text" id="q-d" /></div>
+      </div>
+      <div class="form-group">
+        <label>Correct Answer</label>
+        <select id="q-correct">
+          <option value="A">A</option>
+          <option value="B">B</option>
+          <option value="C">C</option>
+          <option value="D">D</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Explanation</label>
+        <textarea id="q-explanation" rows="2"></textarea>
+      </div>
+      <button type="submit" class="btn btn-block">Save Changes</button>
+    </form>
+  </div>
+</div>
+
+<script src="../../shared/js/supabase-client.js"></script>
+<script src="../../shared/js/auth.js"></script>
+<script src="../../shared/js/utils.js"></script>
+<script>
+let allSubjects = [];
+let allQuestions = [];
+
+(async () => {
+  const profile = await Auth.guard('admin');
+  if (!profile) return;
+
+  const { data: subs } = await sb.from('subjects').select('*').order('name');
+  allSubjects = subs || [];
+
+  const filterSel = document.getElementById('filter-subject');
+  allSubjects.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.textContent = `${s.name} (${s.board} ${s.class})`;
+    filterSel.appendChild(opt);
+  });
+
+  filterSel.addEventListener('change', renderQuestions);
+  document.getElementById('search-q').addEventListener('input', renderQuestions);
+
+  await loadQuestions();
+})();
+
+async function loadQuestions() {
+  const { data, error } = await sb
+    .from('questions')
+    .select('*, subjects(name, board, class)')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    Utils.toast('Error: ' + error.message, 'error');
+    return;
+  }
+
+  allQuestions = data || [];
+  renderStats();
+  renderBreakdowns();
+  renderQuestions();
+}
+
+function renderStats() {
+  document.getElementById('stat-total').textContent = allQuestions.length;
+
+  const subjectIds = new Set(allQuestions.map(q => q.subject_id).filter(Boolean));
+  document.getElementById('stat-subjects').textContent = subjectIds.size;
+
+  const chapters = new Set(allQuestions.map(q => q.chapter).filter(Boolean));
+  document.getElementById('stat-chapters').textContent = chapters.size;
+}
+
+function renderBreakdowns() {
+  // Per subject
+  const subjectCounts = {};
+  allQuestions.forEach(q => {
+    const name = q.subjects ? `${q.subjects.name} (${q.subjects.board} ${q.subjects.class})` : 'Unassigned';
+    subjectCounts[name] = (subjectCounts[name] || 0) + 1;
+  });
+
+  const subjectContainer = document.getElementById('subject-breakdown');
+  const subjectEntries = Object.entries(subjectCounts).sort((a,b) => b[1] - a[1]);
+  if (!subjectEntries.length) {
+    subjectContainer.innerHTML = `<div class="empty-state"><div class="icon">📊</div>No data</div>`;
+  } else {
+    subjectContainer.innerHTML = subjectEntries.map(([name, count]) => `
+      <div class="list-item flex-between">
+        <span>${Utils.escapeHtml(name)}</span>
+        <span class="chip">${count} questions</span>
+      </div>
+    `).join('');
+  }
+
+  // Per chapter
+  const chapterCounts = {};
+  allQuestions.forEach(q => {
+    const name = q.chapter || 'Uncategorized';
+    chapterCounts[name] = (chapterCounts[name] || 0) + 1;
+  });
+
+  const chapterContainer = document.getElementById('chapter-breakdown');
+  const chapterEntries = Object.entries(chapterCounts).sort((a,b) => b[1] - a[1]);
+  if (!chapterEntries.length) {
+    chapterContainer.innerHTML = `<div class="empty-state"><div class="icon">📊</div>No data</div>`;
+  } else {
+    chapterContainer.innerHTML = chapterEntries.map(([name, count]) => `
+      <div class="list-item flex-between">
+        <span>${Utils.escapeHtml(name)}</span>
+        <span class="chip">${count} questions</span>
+      </div>
+    `).join('');
+  }
+}
+
+function renderQuestions() {
+  const subjectFilter = document.getElementById('filter-subject').value;
+  const search = document.getElementById('search-q').value.trim().toLowerCase();
+
+  let filtered = allQuestions;
+  if (subjectFilter) filtered = filtered.filter(q => q.subject_id === subjectFilter);
+  if (search) filtered = filtered.filter(q => q.question.toLowerCase().includes(search));
+
+  const tbody = document.getElementById('q-tbody');
+  if (!filtered.length) {
+    tbody.innerHTML = `<tr><td colspan="7" class="text-center">No questions found</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = filtered.slice(0, 200).map(q => `
+    <tr>
+      <td><code>${q.question_code}</code></td>
+      <td>${q.subjects ? Utils.escapeHtml(q.subjects.name) : '-'}</td>
+      <td>${q.class || '-'}</td>
+      <td>${Utils.escapeHtml(q.chapter || '-')}</td>
+      <td style="max-width:300px;">${Utils.escapeHtml(q.question.substring(0, 80))}${q.question.length > 80 ? '...' : ''}</td>
+      <td><span class="badge badge-active">${q.correct_answer}</span></td>
+      <td>
+        <div class="flex gap-8">
+          <button class="btn btn-sm btn-outline" onclick="editQuestion('${q.id}')">Edit</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteQuestion('${q.id}')">Delete</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+
+  if (filtered.length > 200) {
+    tbody.innerHTML += `<tr><td colspan="7" class="text-center text-muted">Showing first 200 of ${filtered.length} results. Use search/filter to narrow down.</td></tr>`;
+  }
+}
+
+function editQuestion(id) {
+  const q = allQuestions.find(x => x.id === id);
+  if (!q) return;
+
+  document.getElementById('q-id').value = q.id;
+  document.getElementById('q-question').value = q.question;
+  document.getElementById('q-chapter').value = q.chapter || '';
+  document.getElementById('q-a').value = q.option_a || '';
+  document.getElementById('q-b').value = q.option_b || '';
+  document.getElementById('q-c').value = q.option_c || '';
+  document.getElementById('q-d').value = q.option_d || '';
+  document.getElementById('q-correct').value = q.correct_answer || 'A';
+  document.getElementById('q-explanation').value = q.explanation || '';
+
+  document.getElementById('q-modal').classList.remove('hidden');
+}
+
+document.getElementById('q-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = document.getElementById('q-id').value;
+
+  const updates = {
+    question: document.getElementById('q-question').value.trim(),
+    chapter: document.getElementById('q-chapter').value.trim(),
+    option_a: document.getElementById('q-a').value.trim(),
+    option_b: document.getElementById('q-b').value.trim(),
+    option_c: document.getElementById('q-c').value.trim(),
+    option_d: document.getElementById('q-d').value.trim(),
+    correct_answer: document.getElementById('q-correct').value,
+    explanation: document.getElementById('q-explanation').value.trim()
+  };
+
+  const { error } = await sb.from('questions').update(updates).eq('id', id);
+  if (error) {
+    Utils.toast('Update failed: ' + error.message, 'error');
+  } else {
+    Utils.toast('Question updated', 'success');
+    document.getElementById('q-modal').classList.add('hidden');
+    await loadQuestions();
+  }
+});
+
+async function deleteQuestion(id) {
+  if (!confirm('Delete this question?')) return;
+  const { error } = await sb.from('questions').delete().eq('id', id);
+  if (error) {
+    Utils.toast('Delete failed: ' + error.message, 'error');
+  } else {
+    Utils.toast('Question deleted', 'success');
+    await loadQuestions();
+  }
+}
+
+// ---------------------------------------------------------------
+// EXCEL TEMPLATE DOWNLOAD
+// ---------------------------------------------------------------
+function downloadTemplate() {
+  const headers = [
+    'Question ID', 'Chapter', 'Question', 'Option A', 'Option B', 'Option C', 'Option D',
+    'Correct Answer', 'Explanation', 'Subject', 'Class', 'Board'
+  ];
+  const sampleRow = [
+    '', 'Chapter 1: Basics', 'What is the full form of GST?',
+    'Goods and Services Tax', 'General Sales Tax', 'Government Service Tax', 'Gross Sales Tax',
+    'A', 'GST stands for Goods and Services Tax, introduced in India in 2017.',
+    'Accountancy', 'Class 11', 'CBSE'
+  ];
+
+  const ws = XLSX.utils.aoa_to_sheet([headers, sampleRow]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Questions');
+  XLSX.writeFile(wb, 'question_bank_template.xlsx');
+}
+
+// ---------------------------------------------------------------
+// EXCEL UPLOAD / PARSE
+// ---------------------------------------------------------------
+async function uploadExcel() {
+  const fileInput = document.getElementById('excel-file');
+  const file = fileInput.files[0];
+  const statusEl = document.getElementById('upload-status');
+  const btn = document.getElementById('upload-btn');
+
+  if (!file) {
+    Utils.toast('Please select an Excel file', 'warning');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Processing...';
+  statusEl.innerHTML = '<div class="spinner"></div>';
+
+  try {
+    const data = await file.arrayBuffer();
+    const workbook = XLSX.read(data);
+    const sheetName = workbook.SheetNames[0];
+    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
+
+    if (!rows.length) {
+      statusEl.innerHTML = `<p class="error-text">No rows found in the spreadsheet.</p>`;
+      return;
+    }
+
+    let success = 0, failed = 0;
+    const errors = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+
+      const subjectName = String(row['Subject'] || '').trim();
+      const className = String(row['Class'] || '').trim();
+      const boardName = String(row['Board'] || '').trim();
+      const correctAns = String(row['Correct Answer'] || '').trim().toUpperCase();
+      const questionText = String(row['Question'] || '').trim();
+
+      if (!questionText) { failed++; errors.push(`Row ${i+2}: Missing question text`); continue; }
+      if (!['A','B','C','D'].includes(correctAns)) { failed++; errors.push(`Row ${i+2}: Invalid correct answer "${row['Correct Answer']}"`); continue; }
+
+      // Find matching subject
+      const subject = allSubjects.find(s =>
+        s.name.toLowerCase() === subjectName.toLowerCase() &&
+        s.class === className &&
+        s.board === boardName
+      );
+
+      if (!subject) {
+        failed++;
+        errors.push(`Row ${i+2}: Subject "${subjectName}" (${boardName} ${className}) not found`);
+        continue;
+      }
+
+      const payload = {
+        chapter: String(row['Chapter'] || '').trim(),
+        question: questionText,
+        option_a: String(row['Option A'] || '').trim(),
+        option_b: String(row['Option B'] || '').trim(),
+        option_c: String(row['Option C'] || '').trim(),
+        option_d: String(row['Option D'] || '').trim(),
+        correct_answer: correctAns,
+        explanation: String(row['Explanation'] || '').trim(),
+        subject_id: subject.id,
+        class: className,
+        board: boardName
+      };
+
+      // If Question ID provided and unique, use it
+      const providedId = String(row['Question ID'] || '').trim();
+      if (providedId) {
+        const { data: existing } = await sb.from('questions').select('id').eq('question_code', providedId).maybeSingle();
+        if (!existing) payload.question_code = providedId;
+      }
+
+      const { error } = await sb.from('questions').insert(payload);
+      if (error) {
+        failed++;
+        errors.push(`Row ${i+2}: ${error.message}`);
+      } else {
+        success++;
+      }
+    }
+
+    let html = `<p class="font-bold">Upload complete: ${success} added, ${failed} failed.</p>`;
+    if (errors.length) {
+      html += `<div class="text-sm error-text" style="max-height:150px;overflow-y:auto;margin-top:8px;">${errors.map(e => `<div>${Utils.escapeHtml(e)}</div>`).join('')}</div>`;
+    }
+    statusEl.innerHTML = html;
+
+    Utils.toast(`${success} questions added`, success > 0 ? 'success' : 'warning');
+    fileInput.value = '';
+    await loadQuestions();
+  } catch (err) {
+    statusEl.innerHTML = `<p class="error-text">Error: ${Utils.escapeHtml(err.message)}</p>`;
+    Utils.toast('Upload failed: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '⬆ Upload Questions';
+  }
+}
+</script>
+</body>
+</html>

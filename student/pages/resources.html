@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="base-path" content="../../" />
+<title>Resources - Student</title>
+<link rel="stylesheet" href="../../shared/css/styles.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<div class="page">
+  <h2>📁 Resources</h2>
+
+  <div class="card">
+    <div class="card-title flex-between">
+      <span>Available Resources</span>
+      <select id="filter-subject" style="width:auto;"><option value="">All Subjects</option></select>
+    </div>
+    <div id="res-list"><div class="spinner"></div></div>
+  </div>
+</div>
+
+<script src="../../shared/js/supabase-client.js"></script>
+<script src="../../shared/js/auth.js"></script>
+<script src="../../shared/js/utils.js"></script>
+<script>
+let allResources = [];
+
+(async () => {
+  const profile = await Auth.guard('tuition_student');
+  if (!profile) return;
+
+  const { data, error } = await sb
+    .from('resources')
+    .select('*, subjects(name)')
+    .eq('board', profile.board)
+    .eq('class', profile.class)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    document.getElementById('res-list').innerHTML = `<div class="empty-state"><div class="icon">⚠️</div>Error loading resources</div>`;
+    return;
+  }
+
+  allResources = data || [];
+
+  // Populate subject filter
+  const subjects = [...new Set(allResources.map(r => r.subjects?.name).filter(Boolean))];
+  const filterSel = document.getElementById('filter-subject');
+  subjects.forEach(name => {
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = name;
+    filterSel.appendChild(opt);
+  });
+  filterSel.addEventListener('change', renderResources);
+
+  renderResources();
+})();
+
+function renderResources() {
+  const filter = document.getElementById('filter-subject').value;
+  let filtered = allResources;
+  if (filter) filtered = filtered.filter(r => r.subjects?.name === filter);
+
+  const container = document.getElementById('res-list');
+  if (!filtered.length) {
+    container.innerHTML = `<div class="empty-state"><div class="icon">📭</div>No resources available</div>`;
+    return;
+  }
+
+  container.innerHTML = filtered.map(r => `
+    <div class="list-item">
+      <strong>${Utils.escapeHtml(r.title)}</strong>
+      ${r.subjects ? `<span class="chip">${Utils.escapeHtml(r.subjects.name)}</span>` : ''}
+      ${r.description ? `<p class="text-sm mt-8">${Utils.escapeHtml(r.description)}</p>` : ''}
+      <div class="text-sm mt-8"><a href="${r.file_url}" target="_blank">📎 Download / View</a></div>
+      <div class="text-sm text-muted mt-8">${Utils.formatDate(r.created_at)}</div>
+    </div>
+  `).join('');
+}
+</script>
+</body>
+</html>

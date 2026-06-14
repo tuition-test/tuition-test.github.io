@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="base-path" content="../../" />
+<title>Comments - Admin</title>
+<link rel="stylesheet" href="../../shared/css/styles.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<div class="page">
+  <h2>💬 Comments &amp; Feedback</h2>
+  <div class="card">
+    <div class="card-title">All Comments</div>
+    <div id="comments-list"><div class="spinner"></div></div>
+  </div>
+</div>
+
+<!-- REPLY MODAL -->
+<div class="modal-backdrop hidden" id="reply-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Reply to Comment</h3>
+      <button class="modal-close" onclick="document.getElementById('reply-modal').classList.add('hidden')">✕</button>
+    </div>
+    <form id="reply-form">
+      <input type="hidden" id="reply-id" />
+      <div class="form-group">
+        <label>Original Comment</label>
+        <textarea id="reply-original" rows="2" readonly></textarea>
+      </div>
+      <div class="form-group">
+        <label>Your Reply</label>
+        <textarea id="reply-text" rows="3" required></textarea>
+      </div>
+      <button type="submit" class="btn btn-block">Send Reply</button>
+    </form>
+  </div>
+</div>
+
+<script src="../../shared/js/supabase-client.js"></script>
+<script src="../../shared/js/auth.js"></script>
+<script src="../../shared/js/utils.js"></script>
+<script>
+(async () => {
+  const profile = await Auth.guard('admin');
+  if (!profile) return;
+  await loadComments();
+})();
+
+async function loadComments() {
+  const { data, error } = await sb
+    .from('comments')
+    .select('*, profiles!comments_user_id_fkey(name, username, role)')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    Utils.toast('Error: ' + error.message, 'error');
+    return;
+  }
+
+  const container = document.getElementById('comments-list');
+  if (!data || !data.length) {
+    container.innerHTML = `<div class="empty-state"><div class="icon">💬</div>No comments yet</div>`;
+    return;
+  }
+
+  container.innerHTML = data.map(c => `
+    <div class="list-item">
+      <div class="flex-between flex-wrap gap-8">
+        <div style="flex:1;">
+          <strong>${Utils.escapeHtml(c.profiles?.name || 'Unknown')}</strong>
+          <span class="badge badge-${c.profiles?.role || 'other_student'}">${(c.profiles?.role || '').replace('_',' ')}</span>
+          <p class="text-sm mt-8">${Utils.escapeHtml(c.message)}</p>
+          <div class="text-sm text-muted mt-8">${Utils.formatDateTime(c.created_at)}</div>
+          ${c.reply ? `
+            <div class="card mt-8" style="background:var(--primary-light);box-shadow:none;margin-bottom:0;">
+              <strong class="text-sm">Admin Reply:</strong>
+              <p class="text-sm mt-8">${Utils.escapeHtml(c.reply)}</p>
+              <div class="text-sm text-muted">${Utils.formatDateTime(c.replied_at)}</div>
+            </div>
+          ` : ''}
+        </div>
+        <div class="flex gap-8" style="flex-direction:column;">
+          <button class="btn btn-sm btn-outline" onclick="openReply('${c.id}', '${encodeURIComponent(c.message)}')">${c.reply ? 'Edit Reply' : 'Reply'}</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteComment('${c.id}')">Delete</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function openReply(id, encodedMsg) {
+  document.getElementById('reply-id').value = id;
+  document.getElementById('reply-original').value = decodeURIComponent(encodedMsg);
+  document.getElementById('reply-text').value = '';
+  document.getElementById('reply-modal').classList.remove('hidden');
+}
+
+document.getElementById('reply-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = document.getElementById('reply-id').value;
+  const reply = document.getElementById('reply-text').value.trim();
+  const profile = await Auth.getProfile();
+
+  const { error } = await sb.from('comments').update({
+    reply,
+    replied_by: profile.id,
+    replied_at: new Date().toISOString()
+  }).eq('id', id);
+
+  if (error) {
+    Utils.toast('Failed: ' + error.message, 'error');
+  } else {
+    Utils.toast('Reply sent', 'success');
+    document.getElementById('reply-modal').classList.add('hidden');
+    await loadComments();
+  }
+});
+
+async function deleteComment(id) {
+  if (!confirm('Delete this comment?')) return;
+  const { error } = await sb.from('comments').delete().eq('id', id);
+  if (error) {
+    Utils.toast('Delete failed: ' + error.message, 'error');
+  } else {
+    Utils.toast('Comment deleted', 'success');
+    await loadComments();
+  }
+}
+</script>
+</body>
+</html>

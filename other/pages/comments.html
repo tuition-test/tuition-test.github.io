@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="base-path" content="../../" />
+<title>Comments</title>
+<link rel="stylesheet" href="../../shared/css/styles.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<div class="page">
+  <h2>💬 Comments</h2>
+
+  <div class="card">
+    <div class="card-title">Submit a Comment</div>
+    <form id="comment-form">
+      <div class="form-group">
+        <label>Your Message</label>
+        <textarea id="comment-message" rows="3" required placeholder="Share your feedback, questions, or suggestions..."></textarea>
+      </div>
+      <button type="submit" class="btn">Submit</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-title">My Comments</div>
+    <div id="comments-list"><div class="spinner"></div></div>
+  </div>
+</div>
+
+<script src="../../shared/js/supabase-client.js"></script>
+<script src="../../shared/js/auth.js"></script>
+<script src="../../shared/js/utils.js"></script>
+<script>
+let currentProfile = null;
+
+(async () => {
+  currentProfile = await Auth.guard('other_student');
+  if (!currentProfile) return;
+  await loadComments();
+})();
+
+document.getElementById('comment-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const message = document.getElementById('comment-message').value.trim();
+
+  const { error } = await sb.from('comments').insert({
+    user_id: currentProfile.id,
+    message
+  });
+
+  if (error) {
+    Utils.toast('Failed: ' + error.message, 'error');
+  } else {
+    Utils.toast('Comment submitted', 'success');
+    document.getElementById('comment-form').reset();
+    await loadComments();
+  }
+});
+
+async function loadComments() {
+  const { data, error } = await sb
+    .from('comments')
+    .select('*')
+    .eq('user_id', currentProfile.id)
+    .order('created_at', { ascending: false });
+
+  const container = document.getElementById('comments-list');
+
+  if (error) {
+    container.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div>Error loading comments</div>`;
+    return;
+  }
+
+  if (!data || !data.length) {
+    container.innerHTML = `<div class="empty-state"><div class="icon">💬</div>No comments submitted yet</div>`;
+    return;
+  }
+
+  container.innerHTML = data.map(c => `
+    <div class="list-item">
+      <p>${Utils.escapeHtml(c.message)}</p>
+      <div class="text-sm text-muted mt-8">${Utils.formatDateTime(c.created_at)}</div>
+      ${c.reply ? `
+        <div class="card mt-8" style="background:var(--primary-light);box-shadow:none;margin-bottom:0;">
+          <strong class="text-sm">Admin Reply:</strong>
+          <p class="text-sm mt-8">${Utils.escapeHtml(c.reply)}</p>
+          <div class="text-sm text-muted">${Utils.formatDateTime(c.replied_at)}</div>
+        </div>
+      ` : `<div class="text-sm text-muted mt-8">Awaiting reply...</div>`}
+    </div>
+  `).join('');
+}
+</script>
+</body>
+</html>

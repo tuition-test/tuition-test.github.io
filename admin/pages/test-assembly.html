@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="base-path" content="../../" />
+<title>Test Assembly - Admin</title>
+<link rel="stylesheet" href="../../shared/css/styles.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  .q-row { display:flex; align-items:flex-start; gap:10px; padding:10px 0; border-bottom:1px solid var(--border); }
+  .q-row input[type=checkbox] { width:auto; margin-top:3px; flex-shrink:0; }
+  .q-row .q-body { flex:1; }
+  .q-row .q-body strong { font-size:13px; }
+  .q-row .q-body .meta { font-size:11px; color:var(--text-muted); margin-top:2px; }
+  .test-card { border:1px solid var(--border); border-radius:var(--radius); padding:14px; margin-bottom:10px; }
+  .test-card .tname { font-weight:700; font-size:14px; }
+  .test-card .tmeta { font-size:12px; color:var(--text-muted); margin-top:3px; }
+  .split { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media(max-width:768px){ .split { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <h2>🧪 Test Assembly</h2>
+  <p class="text-muted text-sm">Create tests by selecting questions from the Question Bank. Students can then attempt them in their portals.</p>
+
+  <div class="split">
+    <!-- LEFT: Create / edit test -->
+    <div>
+      <div class="card">
+        <div class="card-title" id="form-title">Create New Test</div>
+        <form id="test-form">
+          <input type="hidden" id="tf-id" />
+          <div class="form-group">
+            <label>Test Title *</label>
+            <input type="text" id="tf-title" required />
+          </div>
+          <div class="form-group">
+            <label>Description</label>
+            <textarea id="tf-desc" rows="2"></textarea>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Board *</label>
+              <select id="tf-board" required></select>
+            </div>
+            <div class="form-group">
+              <label>Class *</label>
+              <select id="tf-class" required></select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Subject</label>
+              <select id="tf-subject"><option value="">-- Any --</option></select>
+            </div>
+            <div class="form-group">
+              <label>Duration (minutes)</label>
+              <input type="number" id="tf-duration" value="30" min="1" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="flex gap-8" style="font-weight:500;">
+              <input type="checkbox" id="tf-visible-other" style="width:auto;" />
+              Visible to Other Students
+            </label>
+          </div>
+          <div class="flex gap-8">
+            <button type="submit" class="btn" id="tf-submit-btn">Create Test</button>
+            <button type="button" class="btn btn-outline" id="tf-cancel-btn" onclick="resetForm()" style="display:none;">Cancel</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Question selector (appears after test is created/selected) -->
+      <div class="card hidden" id="q-selector-card">
+        <div class="card-title flex-between">
+          <span>Add Questions</span>
+          <div class="flex gap-8">
+            <select id="qs-filter-subject" style="width:auto;font-size:12px;"><option value="">All Subjects</option></select>
+            <select id="qs-filter-chapter" style="width:auto;font-size:12px;"><option value="">All Chapters</option></select>
+          </div>
+        </div>
+        <input type="text" id="qs-search" placeholder="Search question text..." style="margin-bottom:10px;" />
+        <div id="qs-list" style="max-height:400px;overflow-y:auto;"></div>
+        <button class="btn btn-block mt-16" id="add-selected-btn">Add Selected Questions</button>
+      </div>
+    </div>
+
+    <!-- RIGHT: Existing tests -->
+    <div>
+      <div class="card">
+        <div class="card-title">All Tests</div>
+        <div id="tests-list"><div class="spinner"></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Test detail modal -->
+<div class="modal-backdrop hidden" id="detail-modal">
+  <div class="modal" style="max-width:600px;">
+    <div class="modal-header">
+      <h3 id="detail-title">Test Questions</h3>
+      <button class="modal-close" onclick="closeDetail()">✕</button>
+    </div>
+    <div id="detail-content"></div>
+  </div>
+</div>
+
+<script src="../../shared/js/supabase-client.js"></script>
+<script src="../../shared/js/auth.js"></script>
+<script src="../../shared/js/utils.js"></script>
+<script>
+let allSubjects = [];
+let allQuestions = [];
+let activeTestId = null;
+let activeTestQuestionIds = new Set();
+
+(async () => {
+  const profile = await Auth.guard('admin');
+  if (!profile) return;
+
+  // Load subjects
+  const { data: subs } = await sb.from('subjects').select('*').order('name');
+  allSubjects = subs || [];
+
+  Utils.fillBoardSelect(document.getElementById('tf-board'));
+  document.getElementById('tf-board').addEventListener('change', e => {
+    Utils.fillClassSelect(document.getElementById('tf-class'), e.target.value);
+    fillSubjectDropdown('tf-subject', e.target.value, document.getElementById('tf-class').value);
+  });
+  document.getElementById('tf-class').addEventListener('change', () => {
+    fillSubjectDropdown('tf-subject', document.getElementById('tf-board').value, document.getElementById('tf-class').value);
+    if (activeTestId) loadQsForSelector();
+  });
+
+  document.getElementById('qs-filter-subject').addEventListener('change', renderQsSelector);
+  document.getElementById('qs-filter-chapter').addEventListener('change', renderQsSelector);
+  document.getElementById('qs-search').addEventListener('input', renderQsSelector);
+
+  // Load questions
+  const { data: qs } = await sb.from('questions').select('*, subjects(name, board, class)').order('chapter').order('question_code');
+  allQuestions = qs || [];
+
+  // Populate qs subject filter
+  const uniqueSubs = [...new Map(allSubjects.map(s => [s.id, s])).values()];
+  uniqueSubs.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.textContent = `${s.name} (${s.board} ${s.class})`;
+    document.getElementById('qs-filter-subject').appendChild(opt);
+  });
+
+  // Populate chapter filter
+  const chapters = [...new Set(allQuestions.map(q => q.chapter).filter(Boolean))].sort();
+  chapters.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c;
+    opt.textContent = c;
+    document.getElementById('qs-filter-chapter').appendChild(opt);
+  });
+
+  await loadTests();
+})();
+
+function fillSubjectDropdown(selectId, board, cls) {
+  const sel = document.getElementById(selectId);
+  sel.innerHTML = '<option value="">-- Any --</option>';
+  allSubjects.filter(s => (!board || s.board === board) && (!cls || s.class === cls)).forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.textContent = s.name;
+    sel.appendChild(opt);
+  });
+}
+
+// -------------------------------------------------------
+// FORM SUBMIT — Create or Update test header
+// -------------------------------------------------------
+document.getElementById('test-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = document.getElementById('tf-id').value;
+  const profile = await Auth.getProfile();
+
+  const payload = {
+    title: document.getElementById('tf-title').value.trim(),
+    description: document.getElementById('tf-desc').value.trim(),
+    board: document.getElementById('tf-board').value,
+    class: document.getElementById('tf-class').value,
+    subject_id: document.getElementById('tf-subject').value || null,
+    duration_minutes: parseInt(document.getElementById('tf-duration').value) || 30,
+    visible_to_other_students: document.getElementById('tf-visible-other').checked,
+    created_by: profile.id
+  };
+
+  let testId = id;
+  if (id) {
+    const { error } = await sb.from('tests').update(payload).eq('id', id);
+    if (error) { Utils.toast('Update failed: ' + error.message, 'error'); return; }
+    Utils.toast('Test updated', 'success');
+  } else {
+    const { data, error } = await sb.from('tests').insert(payload).select().single();
+    if (error) { Utils.toast('Create failed: ' + error.message, 'error'); return; }
+    testId = data.id;
+    Utils.toast('Test created! Now add questions below.', 'success');
+  }
+
+  await loadTests();
+  selectTestForEditing(testId);
+});
+
+// -------------------------------------------------------
+// LOAD & RENDER all tests in right panel
+// -------------------------------------------------------
+async function loadTests() {
+  const { data, error } = await sb
+    .from('tests')
+    .select('*, subjects(name), test_questions(id)')
+    .order('created_at', { ascending: false });
+
+  const container = document.getElementById('tests-list');
+  if (error) { container.innerHTML = `<div class="empty-state">Error loading tests</div>`; return; }
+  if (!data || !data.length) {
+    container.innerHTML = `<div class="empty-state"><div class="icon">📭</div>No tests yet. Create one on the left.</div>`;
+    return;
+  }
+
+  container.innerHTML = data.map(t => `
+    <div class="test-card" id="tcard-${t.id}">
+      <div class="flex-between flex-wrap gap-8">
+        <div>
+          <div class="tname">${Utils.escapeHtml(t.title)}</div>
+          <div class="tmeta">${t.board} · ${t.class} · ${t.subjects ? t.subjects.name : 'All subjects'} · ${t.duration_minutes}min</div>
+          <div class="tmeta">${(t.test_questions||[]).length} questions · ${t.visible_to_other_students ? '🌐 Public' : '🔒 Tuition only'}</div>
+        </div>
+        <div class="flex gap-8 flex-wrap">
+          <button class="btn btn-sm btn-outline" onclick="selectTestForEditing('${t.id}')">Add Questions</button>
+          <button class="btn btn-sm btn-outline" onclick="viewTestDetail('${t.id}')">View</button>
+          <button class="btn btn-sm btn-outline" onclick="editTestMeta('${t.id}')">Edit</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteTest('${t.id}')">Delete</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// -------------------------------------------------------
+// SELECT TEST — show question selector
+// -------------------------------------------------------
+async function selectTestForEditing(testId) {
+  activeTestId = testId;
+
+  // Fetch current question IDs in this test
+  const { data: tqs } = await sb.from('test_questions').select('question_id').eq('test_id', testId);
+  activeTestQuestionIds = new Set((tqs || []).map(x => x.question_id));
+
+  document.getElementById('q-selector-card').classList.remove('hidden');
+  document.getElementById('q-selector-card').scrollIntoView({ behavior: 'smooth' });
+
+  renderQsSelector();
+}
+
+function renderQsSelector() {
+  const subFilter = document.getElementById('qs-filter-subject').value;
+  const chapFilter = document.getElementById('qs-filter-chapter').value;
+  const search = document.getElementById('qs-search').value.toLowerCase();
+
+  let filtered = allQuestions;
+  if (subFilter) filtered = filtered.filter(q => q.subject_id === subFilter);
+  if (chapFilter) filtered = filtered.filter(q => q.chapter === chapFilter);
+  if (search) filtered = filtered.filter(q => q.question.toLowerCase().includes(search));
+
+  const container = document.getElementById('qs-list');
+  if (!filtered.length) {
+    container.innerHTML = `<div class="empty-state"><div class="icon">🔍</div>No questions match</div>`;
+    return;
+  }
+
+  container.innerHTML = filtered.slice(0, 100).map(q => {
+    const alreadyAdded = activeTestQuestionIds.has(q.id);
+    return `
+    <div class="q-row">
+      <input type="checkbox" id="qck-${q.id}" value="${q.id}" ${alreadyAdded ? 'checked disabled' : ''} />
+      <div class="q-body">
+        <strong>${Utils.escapeHtml(q.question.substring(0, 100))}${q.question.length > 100 ? '...' : ''}</strong>
+        <div class="meta">${q.question_code} · ${q.subjects?.name || '—'} · ${q.chapter || 'No chapter'}</div>
+        ${alreadyAdded ? '<span class="chip" style="font-size:10px;">Already added</span>' : ''}
+      </div>
+    </div>
+  `;
+  }).join('');
+
+  if (filtered.length > 100) {
+    container.innerHTML += `<div class="text-center text-sm text-muted" style="padding:8px;">Showing first 100. Use filters to narrow down.</div>`;
+  }
+}
+
+document.getElementById('add-selected-btn').addEventListener('click', async () => {
+  if (!activeTestId) return;
+
+  const checked = Array.from(document.querySelectorAll('#qs-list input[type=checkbox]:not([disabled]):checked'));
+  if (!checked.length) {
+    Utils.toast('No new questions selected', 'warning');
+    return;
+  }
+
+  const rows = checked.map(cb => ({ test_id: activeTestId, question_id: cb.value }));
+  const { error } = await sb.from('test_questions').insert(rows);
+
+  if (error) {
+    Utils.toast('Failed to add questions: ' + error.message, 'error');
+  } else {
+    Utils.toast(`${rows.length} question(s) added to test`, 'success');
+    await selectTestForEditing(activeTestId);
+    await loadTests();
+  }
+});
+
+// -------------------------------------------------------
+// EDIT TEST META — prefill form
+// -------------------------------------------------------
+async function editTestMeta(testId) {
+  const { data: t } = await sb.from('tests').select('*').eq('id', testId).single();
+  if (!t) return;
+
+  document.getElementById('tf-id').value = t.id;
+  document.getElementById('tf-title').value = t.title;
+  document.getElementById('tf-desc').value = t.description || '';
+
+  Utils.fillBoardSelect(document.getElementById('tf-board'));
+  document.getElementById('tf-board').value = t.board || '';
+  Utils.fillClassSelect(document.getElementById('tf-class'), t.board || '');
+  document.getElementById('tf-class').value = t.class || '';
+  fillSubjectDropdown('tf-subject', t.board, t.class);
+  document.getElementById('tf-subject').value = t.subject_id || '';
+  document.getElementById('tf-duration').value = t.duration_minutes || 30;
+  document.getElementById('tf-visible-other').checked = t.visible_to_other_students;
+
+  document.getElementById('form-title').textContent = 'Edit Test';
+  document.getElementById('tf-submit-btn').textContent = 'Save Changes';
+  document.getElementById('tf-cancel-btn').style.display = '';
+  document.getElementById('test-form').scrollIntoView({ behavior: 'smooth' });
+}
+
+function resetForm() {
+  document.getElementById('test-form').reset();
+  document.getElementById('tf-id').value = '';
+  document.getElementById('form-title').textContent = 'Create New Test';
+  document.getElementById('tf-submit-btn').textContent = 'Create Test';
+  document.getElementById('tf-cancel-btn').style.display = 'none';
+  document.getElementById('tf-class').innerHTML = '<option value="">-- Select Class --</option>';
+  document.getElementById('tf-subject').innerHTML = '<option value="">-- Any --</option>';
+  activeTestId = null;
+  document.getElementById('q-selector-card').classList.add('hidden');
+}
+
+// -------------------------------------------------------
+// VIEW TEST DETAIL (with remove question option)
+// -------------------------------------------------------
+async function viewTestDetail(testId) {
+  const { data: t } = await sb.from('tests').select('*, subjects(name)').eq('id', testId).single();
+  const { data: tqs } = await sb.from('test_questions').select('question_id, id').eq('test_id', testId);
+
+  let qHtml = '';
+  if (tqs && tqs.length) {
+    const qIds = tqs.map(x => x.question_id);
+    const { data: qs } = await sb.from('questions').select('*').in('id', qIds);
+    const tqMap = {};
+    (tqs || []).forEach(x => { tqMap[x.question_id] = x.id; });
+
+    qHtml = (qs || []).map((q, i) => `
+      <div class="list-item flex-between gap-8">
+        <div style="flex:1;">
+          <strong>${i+1}. ${Utils.escapeHtml(q.question.substring(0,80))}${q.question.length>80?'...':''}</strong>
+          <div class="text-sm text-muted">${q.question_code} · ${q.chapter || '—'} · Ans: ${q.correct_answer}</div>
+        </div>
+        <button class="btn btn-sm btn-danger" onclick="removeQuestion('${tqMap[q.id]}', '${testId}')">Remove</button>
+      </div>
+    `).join('');
+  } else {
+    qHtml = `<div class="empty-state"><div class="icon">❓</div>No questions in this test yet.</div>`;
+  }
+
+  document.getElementById('detail-title').textContent = t ? t.title : 'Test Questions';
+  document.getElementById('detail-content').innerHTML = `
+    <div class="text-sm text-muted" style="margin-bottom:12px;">
+      ${t?.board} · ${t?.class} · ${tqs?.length || 0} questions · ${t?.duration_minutes}min
+      · ${t?.visible_to_other_students ? '🌐 Visible to all' : '🔒 Tuition students only'}
+    </div>
+    ${qHtml}
+  `;
+  document.getElementById('detail-modal').classList.remove('hidden');
+}
+
+async function removeQuestion(tqId, testId) {
+  if (!confirm('Remove this question from the test?')) return;
+  const { error } = await sb.from('test_questions').delete().eq('id', tqId);
+  if (error) {
+    Utils.toast('Failed: ' + error.message, 'error');
+  } else {
+    Utils.toast('Question removed', 'success');
+    await loadTests();
+    await viewTestDetail(testId);
+  }
+}
+
+function closeDetail() {
+  document.getElementById('detail-modal').classList.add('hidden');
+}
+
+// -------------------------------------------------------
+// DELETE TEST
+// -------------------------------------------------------
+async function deleteTest(testId) {
+  if (!confirm('Delete this test and all its questions? This cannot be undone.')) return;
+  const { error } = await sb.from('tests').delete().eq('id', testId);
+  if (error) {
+    Utils.toast('Delete failed: ' + error.message, 'error');
+  } else {
+    Utils.toast('Test deleted', 'success');
+    if (activeTestId === testId) resetForm();
+    await loadTests();
+  }
+}
+</script>
+</body>
+</html>

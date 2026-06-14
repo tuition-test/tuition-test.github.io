@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="base-path" content="../../" />
+<title>Home - Admin</title>
+<link rel="stylesheet" href="../../shared/css/styles.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<div class="page">
+  <h2 class="mb-0">📊 Dashboard Overview</h2>
+  <p class="text-muted text-sm">Quick snapshot of the tuition system</p>
+
+  <div class="stats-grid" id="stats-grid">
+    <!-- stat cards injected here -->
+  </div>
+
+  <div class="card">
+    <div class="card-title">🆕 Recent Registrations</div>
+    <div id="recent-registrations"><div class="spinner"></div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">💵 Recent Fee Collections</div>
+    <div id="recent-fees"><div class="spinner"></div></div>
+  </div>
+</div>
+
+<script src="../../shared/js/supabase-client.js"></script>
+<script src="../../shared/js/auth.js"></script>
+<script src="../../shared/js/utils.js"></script>
+<script>
+(async () => {
+  const profile = await Auth.guard('admin');
+  if (!profile) return;
+
+  const statsGrid = document.getElementById('stats-grid');
+  const stats = [
+    { key: 'total_users', label: 'Total Users', value: 0, cls: '' },
+    { key: 'tuition_students', label: 'Tuition Students', value: 0, cls: '' },
+    { key: 'other_students', label: 'Other Students', value: 0, cls: '' },
+    { key: 'active_students', label: 'Active Students', value: 0, cls: 'success' },
+    { key: 'inactive_students', label: 'Inactive Students', value: 0, cls: 'danger' },
+    { key: 'total_due', label: 'Total Due', value: '₹0', cls: 'warning' },
+    { key: 'total_receivable', label: 'Total Receivable', value: '₹0', cls: '' },
+    { key: 'month_collection', label: 'This Month Collection', value: '₹0', cls: 'success' },
+  ];
+
+  // Render placeholders
+  function renderStats() {
+    statsGrid.innerHTML = stats.map(s => `
+      <div class="stat-card ${s.cls}">
+        <div class="stat-label">${s.label}</div>
+        <div class="stat-value">${s.value}</div>
+      </div>
+    `).join('');
+  }
+  renderStats();
+
+  // Fetch profiles
+  const { data: profiles, error: pErr } = await sb.from('profiles').select('*');
+  if (!pErr && profiles) {
+    stats[0].value = profiles.length;
+    stats[1].value = profiles.filter(p => p.role === 'tuition_student').length;
+    stats[2].value = profiles.filter(p => p.role === 'other_student').length;
+    const studentLike = profiles.filter(p => p.role !== 'admin');
+    stats[3].value = studentLike.filter(p => p.status === 'active').length;
+    stats[4].value = studentLike.filter(p => p.status === 'inactive').length;
+  }
+
+  // Fetch fee records
+  const { data: fees, error: fErr } = await sb.from('fee_records').select('*');
+  if (!fErr && fees) {
+    const totalDue = fees.reduce((sum, f) => sum + Math.max(0, (f.amount_due || 0) - (f.amount_paid || 0)), 0);
+    const totalReceivable = fees.reduce((sum, f) => sum + (f.amount_due || 0), 0);
+    const currentMonth = Utils.currentMonth();
+    const monthCollection = fees.filter(f => f.month === currentMonth).reduce((sum, f) => sum + (f.amount_paid || 0), 0);
+
+    stats[5].value = Utils.formatCurrency(totalDue);
+    stats[6].value = Utils.formatCurrency(totalReceivable);
+    stats[7].value = Utils.formatCurrency(monthCollection);
+  }
+
+  renderStats();
+
+  // Recent registrations
+  const { data: recentRegs } = await sb
+    .from('profiles')
+    .select('name, role, board, class, created_at')
+    .order('created_at', { ascending: false })
+    .limit(5);
+
+  const regContainer = document.getElementById('recent-registrations');
+  if (recentRegs && recentRegs.length) {
+    regContainer.innerHTML = recentRegs.map(r => `
+      <div class="list-item flex-between">
+        <div>
+          <strong>${Utils.escapeHtml(r.name)}</strong>
+          <div class="text-sm text-muted">${r.board ? r.board + ' - ' + r.class : 'No board assigned'}</div>
+        </div>
+        <div style="text-align:right">
+          <span class="badge badge-${r.role}">${r.role.replace('_',' ')}</span>
+          <div class="text-sm text-muted mt-8">${Utils.formatDate(r.created_at)}</div>
+        </div>
+      </div>
+    `).join('');
+  } else {
+    regContainer.innerHTML = `<div class="empty-state"><div class="icon">📭</div>No recent registrations</div>`;
+  }
+
+  // Recent fee collections
+  const { data: recentFees } = await sb
+    .from('fee_records')
+    .select('amount_paid, paid_on, month, status, profiles(name)')
+    .order('paid_on', { ascending: false })
+    .limit(5);
+
+  const feesContainer = document.getElementById('recent-fees');
+  const paidFees = (recentFees || []).filter(f => f.amount_paid > 0);
+  if (paidFees.length) {
+    feesContainer.innerHTML = paidFees.map(f => `
+      <div class="list-item flex-between">
+        <div>
+          <strong>${Utils.escapeHtml(f.profiles?.name || 'Unknown')}</strong>
+          <div class="text-sm text-muted">Month: ${f.month}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="font-bold">${Utils.formatCurrency(f.amount_paid)}</div>
+          <div class="text-sm text-muted">${Utils.formatDate(f.paid_on)}</div>
+        </div>
+      </div>
+    `).join('');
+  } else {
+    feesContainer.innerHTML = `<div class="empty-state"><div class="icon">💸</div>No fee collections yet</div>`;
+  }
+})();
+</script>
+</body>
+</html>

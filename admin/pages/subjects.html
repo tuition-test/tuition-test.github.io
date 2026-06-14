@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="base-path" content="../../" />
+<title>Subjects - Admin</title>
+<link rel="stylesheet" href="../../shared/css/styles.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<div class="page">
+  <h2>📚 Subject Management</h2>
+
+  <div class="card">
+    <div class="card-title">Add New Subject</div>
+    <form id="add-form" class="form-row" style="align-items:flex-end;">
+      <div class="form-group mb-0">
+        <label>Subject Name *</label>
+        <input type="text" id="add-name" required placeholder="e.g. Accountancy" />
+      </div>
+      <div class="form-group mb-0">
+        <label>Board *</label>
+        <select id="add-board" required></select>
+      </div>
+      <div class="form-group mb-0">
+        <label>Class *</label>
+        <select id="add-class" required></select>
+      </div>
+      <div class="form-group mb-0">
+        <button type="submit" class="btn w-full">+ Add Subject</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-title flex-between">
+      <span>All Subjects</span>
+      <div class="flex gap-8">
+        <select id="filter-board" style="width:auto;">
+          <option value="">All Boards</option>
+          <option value="WBCHSE">WBCHSE</option>
+          <option value="CBSE">CBSE</option>
+        </select>
+        <select id="filter-class" style="width:auto;">
+          <option value="">All Classes</option>
+        </select>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Subject</th><th>Board</th><th>Class</th><th>Actions</th></tr>
+        </thead>
+        <tbody id="subjects-tbody">
+          <tr><td colspan="4" class="text-center"><div class="spinner"></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT MODAL -->
+<div class="modal-backdrop hidden" id="edit-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Edit Subject</h3>
+      <button class="modal-close" onclick="document.getElementById('edit-modal').classList.add('hidden')">✕</button>
+    </div>
+    <form id="edit-form">
+      <input type="hidden" id="edit-id" />
+      <div class="form-group">
+        <label>Subject Name</label>
+        <input type="text" id="edit-name" required />
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Board</label>
+          <select id="edit-board" required></select>
+        </div>
+        <div class="form-group">
+          <label>Class</label>
+          <select id="edit-class" required></select>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-block">Save Changes</button>
+    </form>
+  </div>
+</div>
+
+<script src="../../shared/js/supabase-client.js"></script>
+<script src="../../shared/js/auth.js"></script>
+<script src="../../shared/js/utils.js"></script>
+<script>
+let allSubjects = [];
+
+(async () => {
+  const profile = await Auth.guard('admin');
+  if (!profile) return;
+
+  Utils.fillBoardSelect(document.getElementById('add-board'));
+  Utils.fillBoardSelect(document.getElementById('edit-board'));
+
+  document.getElementById('add-board').addEventListener('change', e => {
+    Utils.fillClassSelect(document.getElementById('add-class'), e.target.value);
+  });
+  document.getElementById('edit-board').addEventListener('change', e => {
+    Utils.fillClassSelect(document.getElementById('edit-class'), e.target.value);
+  });
+  document.getElementById('filter-board').addEventListener('change', e => {
+    Utils.fillClassSelect(document.getElementById('filter-class'), e.target.value);
+    document.getElementById('filter-class').insertAdjacentHTML('afterbegin', '<option value="">All Classes</option>');
+    renderSubjects();
+  });
+  document.getElementById('filter-class').addEventListener('change', renderSubjects);
+
+  await loadSubjects();
+})();
+
+async function loadSubjects() {
+  const { data, error } = await sb.from('subjects').select('*').order('board').order('class').order('name');
+  if (error) {
+    Utils.toast('Error: ' + error.message, 'error');
+    return;
+  }
+  allSubjects = data || [];
+  renderSubjects();
+}
+
+function renderSubjects() {
+  const boardFilter = document.getElementById('filter-board').value;
+  const classFilter = document.getElementById('filter-class').value;
+
+  let filtered = allSubjects;
+  if (boardFilter) filtered = filtered.filter(s => s.board === boardFilter);
+  if (classFilter) filtered = filtered.filter(s => s.class === classFilter);
+
+  const tbody = document.getElementById('subjects-tbody');
+  if (!filtered.length) {
+    tbody.innerHTML = `<tr><td colspan="4" class="text-center">No subjects found</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(s => `
+    <tr>
+      <td><strong>${Utils.escapeHtml(s.name)}</strong></td>
+      <td>${s.board || '-'}</td>
+      <td>${s.class || '-'}</td>
+      <td>
+        <div class="flex gap-8">
+          <button class="btn btn-sm btn-outline" onclick="editSubject('${s.id}')">Edit</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteSubject('${s.id}')">Delete</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+document.getElementById('add-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = document.getElementById('add-name').value.trim();
+  const board = document.getElementById('add-board').value;
+  const cls = document.getElementById('add-class').value;
+
+  const { error } = await sb.from('subjects').insert({ name, board, class: cls });
+  if (error) {
+    Utils.toast('Failed: ' + error.message, 'error');
+  } else {
+    Utils.toast('Subject added', 'success');
+    document.getElementById('add-form').reset();
+    document.getElementById('add-class').innerHTML = '<option value="">-- Select Class --</option>';
+    await loadSubjects();
+  }
+});
+
+function editSubject(id) {
+  const s = allSubjects.find(x => x.id === id);
+  if (!s) return;
+
+  document.getElementById('edit-id').value = s.id;
+  document.getElementById('edit-name').value = s.name;
+  document.getElementById('edit-board').value = s.board || '';
+  Utils.fillClassSelect(document.getElementById('edit-class'), s.board || '');
+  document.getElementById('edit-class').value = s.class || '';
+
+  document.getElementById('edit-modal').classList.remove('hidden');
+}
+
+document.getElementById('edit-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = document.getElementById('edit-id').value;
+  const updates = {
+    name: document.getElementById('edit-name').value.trim(),
+    board: document.getElementById('edit-board').value,
+    class: document.getElementById('edit-class').value
+  };
+
+  const { error } = await sb.from('subjects').update(updates).eq('id', id);
+  if (error) {
+    Utils.toast('Update failed: ' + error.message, 'error');
+  } else {
+    Utils.toast('Subject updated', 'success');
+    document.getElementById('edit-modal').classList.add('hidden');
+    await loadSubjects();
+  }
+});
+
+async function deleteSubject(id) {
+  if (!confirm('Delete this subject? This may affect linked student subjects, homework, resources, and questions.')) return;
+  const { error } = await sb.from('subjects').delete().eq('id', id);
+  if (error) {
+    Utils.toast('Delete failed: ' + error.message, 'error');
+  } else {
+    Utils.toast('Subject deleted', 'success');
+    await loadSubjects();
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="base-path" content="../../" />
+<title>Notices - Admin</title>
+<link rel="stylesheet" href="../../shared/css/styles.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<div class="page">
+  <h2>📢 Notice Management</h2>
+
+  <div class="card">
+    <div class="card-title">Post New Notice</div>
+    <form id="notice-form">
+      <div class="form-group">
+        <label>Target Audience *</label>
+        <select id="notice-target" required>
+          <option value="all">All Students</option>
+          <option value="board">Specific Board</option>
+          <option value="class">Specific Board + Class</option>
+          <option value="user">Specific User</option>
+        </select>
+      </div>
+
+      <div class="form-row hidden" id="board-row">
+        <div class="form-group">
+          <label>Board</label>
+          <select id="notice-board"></select>
+        </div>
+        <div class="form-group hidden" id="class-group">
+          <label>Class</label>
+          <select id="notice-class"></select>
+        </div>
+      </div>
+
+      <div class="form-group hidden" id="user-group">
+        <label>Select User</label>
+        <select id="notice-user"><option value="">-- Select --</option></select>
+      </div>
+
+      <div class="form-group">
+        <label>Title *</label>
+        <input type="text" id="notice-title" required />
+      </div>
+      <div class="form-group">
+        <label>Message *</label>
+        <textarea id="notice-message" rows="3" required></textarea>
+      </div>
+      <div class="form-group">
+        <label>Date</label>
+        <input type="date" id="notice-date" />
+      </div>
+      <button type="submit" class="btn">+ Post Notice</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-title">All Notices</div>
+    <div id="notice-list"><div class="spinner"></div></div>
+  </div>
+</div>
+
+<script src="../../shared/js/supabase-client.js"></script>
+<script src="../../shared/js/auth.js"></script>
+<script src="../../shared/js/utils.js"></script>
+<script>
+let allUsers = [];
+
+(async () => {
+  const profile = await Auth.guard('admin');
+  if (!profile) return;
+
+  Utils.fillBoardSelect(document.getElementById('notice-board'));
+  document.getElementById('notice-date').value = new Date().toISOString().split('T')[0];
+
+  document.getElementById('notice-target').addEventListener('change', handleTargetChange);
+  document.getElementById('notice-board').addEventListener('change', e => {
+    Utils.fillClassSelect(document.getElementById('notice-class'), e.target.value);
+  });
+
+  const { data: users } = await sb.from('profiles').select('id, name, username, role').neq('role', 'admin');
+  allUsers = users || [];
+  const userSelect = document.getElementById('notice-user');
+  allUsers.forEach(u => {
+    const opt = document.createElement('option');
+    opt.value = u.id;
+    opt.textContent = `${u.name} (@${u.username})`;
+    userSelect.appendChild(opt);
+  });
+
+  await loadNotices();
+})();
+
+function handleTargetChange() {
+  const val = document.getElementById('notice-target').value;
+  document.getElementById('board-row').classList.toggle('hidden', val !== 'board' && val !== 'class');
+  document.getElementById('class-group').classList.toggle('hidden', val !== 'class');
+  document.getElementById('user-group').classList.toggle('hidden', val !== 'user');
+}
+
+document.getElementById('notice-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const target = document.getElementById('notice-target').value;
+  const title = document.getElementById('notice-title').value.trim();
+  const message = document.getElementById('notice-message').value.trim();
+  const date = document.getElementById('notice-date').value || new Date().toISOString().split('T')[0];
+  const profile = await Auth.getProfile();
+
+  const payload = {
+    title, message,
+    target_type: target,
+    notice_date: date,
+    created_by: profile.id,
+    target_board: null,
+    target_class: null,
+    target_user_id: null
+  };
+
+  if (target === 'board' || target === 'class') {
+    payload.target_board = document.getElementById('notice-board').value;
+  }
+  if (target === 'class') {
+    payload.target_class = document.getElementById('notice-class').value;
+  }
+  if (target === 'user') {
+    payload.target_user_id = document.getElementById('notice-user').value;
+  }
+
+  const { error } = await sb.from('notices').insert(payload);
+  if (error) {
+    Utils.toast('Failed: ' + error.message, 'error');
+  } else {
+    Utils.toast('Notice posted', 'success');
+    document.getElementById('notice-form').reset();
+    document.getElementById('notice-date').value = new Date().toISOString().split('T')[0];
+    handleTargetChange();
+    await loadNotices();
+  }
+});
+
+async function loadNotices() {
+  const { data, error } = await sb
+    .from('notices')
+    .select('*, profiles!notices_target_user_id_fkey(name)')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    Utils.toast('Error: ' + error.message, 'error');
+    return;
+  }
+
+  const container = document.getElementById('notice-list');
+  if (!data || !data.length) {
+    container.innerHTML = `<div class="empty-state"><div class="icon">📭</div>No notices posted yet</div>`;
+    return;
+  }
+
+  container.innerHTML = data.map(n => {
+    let targetLabel = 'All Students';
+    if (n.target_type === 'board') targetLabel = n.target_board;
+    if (n.target_type === 'class') targetLabel = `${n.target_board} - ${n.target_class}`;
+    if (n.target_type === 'user') targetLabel = `User: ${n.profiles?.name || 'Unknown'}`;
+
+    return `
+    <div class="list-item">
+      <div class="flex-between flex-wrap gap-8">
+        <div>
+          <strong>${Utils.escapeHtml(n.title)}</strong>
+          <span class="chip">${targetLabel}</span>
+          <p class="text-sm mt-8">${Utils.escapeHtml(n.message)}</p>
+          <div class="text-sm text-muted mt-8">${Utils.formatDate(n.notice_date)}</div>
+        </div>
+        <button class="btn btn-sm btn-danger" onclick="deleteNotice('${n.id}')">Delete</button>
+      </div>
+    </div>
+  `;
+  }).join('');
+}
+
+async function deleteNotice(id) {
+  if (!confirm('Delete this notice?')) return;
+  const { error } = await sb.from('notices').delete().eq('id', id);
+  if (error) {
+    Utils.toast('Delete failed: ' + error.message, 'error');
+  } else {
+    Utils.toast('Notice deleted', 'success');
+    await loadNotices();
+  }
+}
+</script>
+</body>
+</html>
