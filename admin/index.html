@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -14,6 +15,116 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" />
 <link rel="stylesheet" href="../shared/css/styles.css" />
 <script>(function(){try{var t=localStorage.getItem('tuition.theme')||'dark';document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();</script>
+<style>
+  /* ── Admin shell layout fixes (index.html only) ── */
+
+  /* Make html/body fill the viewport exactly — no scroll on the shell */
+  html, body {
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  /* app-shell fills the remaining height below the topbar, side by side */
+  .app-shell {
+    display: flex;
+    height: calc(100dvh - var(--topbar-h));
+    overflow: hidden;
+  }
+
+  /* On desktop the sidebar is sticky/visible; content fills the rest */
+  .content-frame-wrap {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 100%;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* iframe fills the whole content area — no more half-page */
+  #content-frame {
+    flex: 1 1 0;
+    width: 100%;
+    height: 100%;
+    min-height: unset;
+    border: none;
+    display: block;
+  }
+
+  /* ── Heartbeat row in sidebar ── */
+  .hb-sidebar-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 14px;
+    margin: 3px 0;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--card-bg);
+    cursor: default;
+    user-select: none;
+  }
+  .hb-sidebar-row .hb-dot {
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    background: var(--text-faint);
+    flex-shrink: 0;
+    transition: background .3s ease;
+  }
+  .hb-sidebar-row.hb-ok   { border-color: rgba(52,211,153,.30); }
+  .hb-sidebar-row.hb-ok   .hb-dot { background: var(--success); box-shadow: 0 0 6px var(--success); animation: hbPulse 2s ease infinite; }
+  .hb-sidebar-row.hb-ok   .hb-label { color: var(--success); }
+  .hb-sidebar-row.hb-warn { border-color: rgba(251,191,36,.30); }
+  .hb-sidebar-row.hb-warn .hb-dot { background: var(--warning); }
+  .hb-sidebar-row.hb-warn .hb-label { color: var(--warning); }
+  .hb-sidebar-row.hb-err  { border-color: rgba(248,113,113,.30); }
+  .hb-sidebar-row.hb-err  .hb-dot { background: var(--danger); }
+  .hb-sidebar-row.hb-err  .hb-label { color: var(--danger); }
+
+  .hb-sidebar-row .hb-body {
+    flex: 1; min-width: 0;
+  }
+  .hb-sidebar-row .hb-title {
+    font-size: 11px; font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: .05em;
+    line-height: 1;
+    margin-bottom: 2px;
+  }
+  .hb-sidebar-row .hb-label {
+    font-size: 12.5px; font-weight: 600;
+    color: var(--text-muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    transition: color .2s ease;
+  }
+
+  .hb-refresh-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px; height: 30px;
+    border-radius: 8px;
+    background: var(--card-bg-2);
+    border: 1px solid var(--border-strong);
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 15px;
+    padding: 0;
+    flex-shrink: 0;
+    transition: background .2s ease, color .2s ease;
+  }
+  .hb-refresh-btn:hover  { background: var(--primary-light); color: var(--primary); border-color: var(--primary); }
+  .hb-refresh-btn:active { transform: scale(.93); }
+  .hb-refresh-btn.spinning { animation: hbSpin .7s linear infinite; }
+
+  @keyframes hbPulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: .4; }
+  }
+  @keyframes hbSpin {
+    to { transform: rotate(360deg); }
+  }
+</style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
@@ -48,6 +159,16 @@
       
       <a data-page="pages/settings.html"><span class="icon">⚙️</span> Settings</a>
       <a id="logout-link"><span class="icon">🚪</span> Logout</a>
+
+      <!-- Heartbeat -->
+      <div class="hb-sidebar-row" id="hb-sidebar-row">
+        <span class="hb-dot" id="hb-dot"></span>
+        <div class="hb-body">
+          <div class="hb-title">Heartbeat</div>
+          <div class="hb-label" id="hb-time">Loading…</div>
+        </div>
+        <button class="hb-refresh-btn" id="hb-refresh-btn" title="Update heartbeat now" type="button">↻</button>
+      </div>
     </nav>
   </aside>
 
@@ -102,6 +223,63 @@
     overlay.classList.remove('show');
   }
   AppShell.registerPWA('../');
+
+  // ── Heartbeat widget ──────────────────────────────────────────────
+  const HB_API = 'https://script.google.com/macros/s/AKfycbx-3MDkhYe7fvuWTrx0gY3QCvm8TCZiFc7U8g-VwTiE1bAs6H0zklzAJUD63RBPZg8/exec';
+  const hbRow  = document.getElementById('hb-sidebar-row');
+  const hbTime = document.getElementById('hb-time');
+  const hbBtn  = document.getElementById('hb-refresh-btn');
+
+  function hbSetState(text, state) {
+    hbTime.textContent = text;
+    hbRow.classList.remove('hb-ok', 'hb-warn', 'hb-err');
+    if (state) hbRow.classList.add(state);
+  }
+
+  function hbFormatTime(raw) {
+    const d = new Date(raw);
+    if (isNaN(d)) return raw;
+    const now = new Date();
+    const diffMin = Math.round((now - d) / 60000);
+    let ago = diffMin < 1 ? 'just now'
+            : diffMin < 60 ? `${diffMin}m ago`
+            : `${Math.round(diffMin/60)}h ago`;
+    const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return `${timeStr} (${ago})`;
+  }
+
+  async function hbLoad() {
+    try {
+      const res  = await fetch(HB_API);
+      const data = await res.json();
+      const d    = new Date(data.update_time);
+      const diffMin = (new Date() - d) / 60000;
+      const state = diffMin < 10 ? 'hb-ok' : diffMin < 60 ? 'hb-warn' : 'hb-err';
+      hbSetState(hbFormatTime(data.update_time), state);
+    } catch {
+      hbSetState('Unreachable', 'hb-err');
+    }
+  }
+
+  async function hbUpdate() {
+    hbBtn.classList.add('spinning');
+    hbBtn.disabled = true;
+    hbSetState('Updating…', null);
+    try {
+      const res  = await fetch(HB_API, { method: 'POST' });
+      const data = await res.json();
+      hbSetState(hbFormatTime(data.update_time), 'hb-ok');
+    } catch {
+      hbSetState('Failed', 'hb-err');
+    } finally {
+      hbBtn.classList.remove('spinning');
+      hbBtn.disabled = false;
+    }
+  }
+
+  hbBtn.addEventListener('click', hbUpdate);
+  hbLoad();
+  setInterval(hbLoad, 30000);
 </script>
 </body>
 </html>
